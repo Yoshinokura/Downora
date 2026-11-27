@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace Downora;
@@ -71,6 +72,22 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (uri.Scheme is "ftp" or "ftps")
+        {
+            if (WindowsCredentialStore.Read(uri) is null)
+            {
+                var credential = PromptForFtpCredentials();
+                if (credential is null) return;
+                try { WindowsCredentialStore.Save(uri, credential.UserName, credential.Password); }
+                catch (Exception ex)
+                {
+                    MessageBox.Show((_chinese ? "无法保存凭据：" : "Could not save credentials: ") + ex.Message,
+                        "Downora", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+            }
+        }
+
         var name = Path.GetFileName(uri.LocalPath);
         if (string.IsNullOrWhiteSpace(name)) name = "download-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
         name = Sanitize(Uri.UnescapeDataString(name));
@@ -83,6 +100,49 @@ public partial class MainWindow : Window
         UrlBox.Clear();
         SaveQueue();
         StartDownload(item);
+    }
+
+    private NetworkCredential? PromptForFtpCredentials()
+    {
+        var dialog = new Window
+        {
+            Title = _chinese ? "FTP 登录凭据" : "FTP credentials",
+            Owner = this,
+            Width = 390,
+            Height = 250,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Background = System.Windows.Media.Brushes.White
+        };
+
+        var username = new TextBox { Text = "anonymous", Margin = new Thickness(0, 5, 0, 12), Height = 30 };
+        var password = new PasswordBox { Margin = new Thickness(0, 5, 0, 14), Height = 30 };
+        var save = new Button { Content = _chinese ? "保存并继续" : "Save and continue", MinWidth = 110, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = _chinese ? "取消" : "Cancel", MinWidth = 80, IsCancel = true };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        buttons.Children.Add(save);
+        buttons.Children.Add(cancel);
+        var panel = new StackPanel { Margin = new Thickness(22) };
+        panel.Children.Add(new TextBlock { Text = _chinese ? "用户名" : "Username" });
+        panel.Children.Add(username);
+        panel.Children.Add(new TextBlock { Text = _chinese ? "密码" : "Password" });
+        panel.Children.Add(password);
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+
+        NetworkCredential? result = null;
+        save.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(username.Text))
+            {
+                MessageBox.Show(_chinese ? "请输入用户名。" : "Enter a username.", "Downora");
+                return;
+            }
+            result = new NetworkCredential(username.Text.Trim(), password.Password);
+            dialog.DialogResult = true;
+        };
+
+        return dialog.ShowDialog() == true ? result : null;
     }
 
     private void StartDownload(DownloadItem item)
@@ -376,11 +436,8 @@ public partial class MainWindow : Window
     private async Task DownloadFtpAsync(DownloadItem item, string partPath, CancellationToken token)
     {
         var isFtps = item.Url.Scheme == "ftps";
-        if (!string.IsNullOrEmpty(item.Url.UserInfo) &&
-            !item.Url.UserInfo.Equals("anonymous", StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException(_chinese
-                ? "目前 FTP 仅支持匿名访问；为避免明文保存密码，暂不接受 URL 内嵌账号密码。"
-                : "FTP currently supports anonymous access only. Credentials in URLs are not accepted to avoid storing passwords in the queue.");
+        var credential = WindowsCredentialStore.Read(item.Url)
+            ?? new NetworkCredential("anonymous", "downora@localhost");
 
         var builder = new UriBuilder(item.Url) { Scheme = Uri.UriSchemeFtp };
         // This adapter implements explicit FTPS (AUTH TLS), which uses the FTP control port by default.
@@ -398,7 +455,7 @@ public partial class MainWindow : Window
         request.UsePassive = true;
         request.EnableSsl = isFtps;
         request.KeepAlive = false;
-        request.Credentials = new NetworkCredential("anonymous", "downora@localhost");
+        request.Credentials = credential;
 
         var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
         if (offset > 0) request.ContentOffset = offset;
