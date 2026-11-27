@@ -289,6 +289,7 @@ public partial class MainWindow : Window
             // A server may advertise byte ranges but fail to honor a specific range request.
             // Discard segmented fragments and let the caller fall back to a normal HTTP transfer.
             foreach (var path in segmentPaths) TryDelete(path);
+            TryDelete(partPath);
             return false;
         }
         catch
