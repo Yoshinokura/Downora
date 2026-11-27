@@ -120,6 +120,7 @@ public partial class MainWindow : Window
             item.Progress = 100;
             item.IsPaused = false;
             item.IsCancelled = false;
+            item.IsCompleted = true;
             item.Status = _chinese ? "已完成" : "Completed";
             item.SpeedText = "";
             FooterText.Text = _chinese ? "下载完成" : "Download complete";
@@ -154,7 +155,7 @@ public partial class MainWindow : Window
     private void PauseButton_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not DownloadItem item) return;
-        if (item.Status == "Completed" || item.Status == "已完成" || item.IsCancelled) return;
+        if (item.IsCompleted || item.IsCancelled) return;
 
         if (item.IsPaused)
         {
@@ -177,6 +178,8 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is DownloadItem item)
         {
+            if (item.IsCompleted || item.IsCancelled) return;
+
             // A paused task has no active stream to unwind, so it can be finalized immediately.
             var wasPaused = item.IsPaused;
             item.IsCancelled = true;
@@ -249,6 +252,7 @@ public sealed class DownloadItem : INotifyPropertyChanged
     public string FileName => Path.GetFileName(TargetPath);
     public bool IsPaused { get; set; }
     public bool IsCancelled { get; set; }
+    public bool IsCompleted { get; set; }
     private bool _chinese;
     private string _status;
     private double _progress;
