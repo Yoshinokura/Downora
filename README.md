@@ -10,6 +10,7 @@
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
+- Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
 - Anonymous FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with pause/resume where the server supports REST; FTP credentials and implicit FTPS (port 990) are not yet supported
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
