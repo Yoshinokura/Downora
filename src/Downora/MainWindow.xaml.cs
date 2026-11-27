@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -31,6 +32,57 @@ public partial class MainWindow : Window
         DownloadsList.ItemsSource = _items;
         Directory.CreateDirectory(_root);
         LoadQueue();
+        EnsureEd2kEngineRunning();
+    }
+
+    private void EnsureEd2kEngineRunning()
+    {
+        var engineRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "Engine", "aMule");
+        if (!Directory.Exists(engineRoot) || Process.GetProcessesByName("amuled").Length > 0) return;
+
+        var daemon = Directory.GetFiles(engineRoot, "amuled.exe", SearchOption.AllDirectories).FirstOrDefault();
+        if (daemon is null) return;
+
+        try
+        {
+            var startInfo = new ProcessStartInfo(daemon, "--full-daemon")
+            {
+                WorkingDirectory = Path.GetDirectoryName(daemon)!,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            FooterText.Text = _chinese ? "eD2k 引擎启动失败：" + ex.Message : "Could not start eD2k engine: " + ex.Message;
+        }
+    }
+
+    private void Ed2kSetupButton_Click(object sender, RoutedEventArgs e)
+    {
+        var scriptPath = Path.Combine(AppContext.BaseDirectory, "scripts", "Install-Ed2kEngine.ps1");
+        if (!File.Exists(scriptPath))
+        {
+            MessageBox.Show(_chinese ? "未找到 eD2k 一键安装脚本。" : "The eD2k setup script could not be found.",
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("powershell.exe",
+                "-NoProfile -ExecutionPolicy Bypass -File \"" + scriptPath + "\"")
+            {
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法启动安装程序：" : "Could not launch setup: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
@@ -42,6 +94,7 @@ public partial class MainWindow : Window
         FooterText.Text = _chinese ? "就绪" : "Ready";
         EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS / eD2k 链接解析" : "HTTP / HTTPS / FTP / FTPS / eD2k link parsing";
         SettingsButton.Content = _chinese ? "设置" : "Settings";
+        Ed2kSetupButton.Content = _chinese ? "一键配置 eD2k" : "Set up eD2k";
         foreach (var item in _items) item.RefreshLanguage(_chinese);
     }
 
