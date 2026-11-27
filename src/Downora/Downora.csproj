@@ -11,4 +11,7 @@
   <ItemGroup>
     <Content Include="..\..\scripts\Install-Ed2kEngine.ps1" Link="scripts\Install-Ed2kEngine.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MonoTorrent" Version="3.0.2" />
+  </ItemGroup>
 </Project>
