@@ -24,7 +24,7 @@
 
 Download the **Downora-Windows-Setup** artifact from the latest successful [Windows build](https://github.com/Yoshinokura/Downora/actions/workflows/windows-build.yml), run `Downora-Setup.exe`, and follow the installer. The app is published self-contained, so users do not need to install the .NET runtime or SDK separately. The installer supports Windows 10/11 x64, per-user installation, Start menu shortcuts and an optional desktop shortcut.
 
-The CI installer is currently an unsigned build artifact (not yet a signed public release). The separate aMule engine is not bundled into the Downora installer; users can set it up on demand with the in-app **Set up eD2k** button.
+The CI installer is currently an unsigned build artifact (not yet a signed public release). The separate aMule engine is not bundled into the Downora installer; users can set it up on demand with the in-app **Set up eD2k** button. The setup helper tries two geographically routed official SourceForge download endpoints, then the official GitHub release as a fallback. Every source is checked against the same pinned upstream SHA-256; failed or mismatched downloads are discarded. Actual mainland China speed still depends on the user's ISP and current international routing, so no fixed speed is guaranteed.
 
 ## Run from source
 
