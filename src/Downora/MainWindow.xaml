@@ -1,0 +1,62 @@
+<Window x:Class="Downora.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Downora" Height="760" Width="1120" MinHeight="620" MinWidth="900"
+        Background="{StaticResource SurfaceBrush}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
+  <Grid Margin="26">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <DockPanel Grid.Row="0" Margin="0,0,0,22">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="LanguageButton" Content="中文 / EN" Click="LanguageButton_Click"/>
+        <Button Content="Settings" x:Name="SettingsButton"/>
+      </StackPanel>
+      <StackPanel>
+        <TextBlock x:Name="AppTitle" Text="Downora" FontSize="30" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+        <TextBlock x:Name="Subtitle" Text="A simpler way to download" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="1,3,0,0"/>
+      </StackPanel>
+    </DockPanel>
+    <Border Grid.Row="1" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="16" Margin="0,0,0,18">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste an HTTP or HTTPS link" KeyDown="UrlBox_KeyDown"/>
+        <Button Grid.Column="1" Content="＋  Add download" Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="22,10" Click="AddButton_Click"/>
+      </Grid>
+    </Border>
+    <Border Grid.Row="2" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="18">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,16">
+          <TextBlock x:Name="QueueTitle" Text="Downloads" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+          <TextBlock x:Name="QueueCount" Text="  ·  0 items" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+        </StackPanel>
+        <ListView x:Name="DownloadsList" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListView.ItemTemplate>
+            <DataTemplate>
+              <Border BorderBrush="#EEF0F2" BorderThickness="0,0,0,1" Padding="8,13">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" Foreground="#202124" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Status}" FontSize="12" Foreground="#5F6368" Margin="0,4,0,0"/>
+                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="5" Margin="0,9,10,0" Foreground="#1A73E8" Background="#E8EAED"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ProgressText}" Foreground="#3C4043" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding SpeedText}" FontSize="11" Foreground="#80868B" HorizontalAlignment="Right" Margin="0,4,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Pause" Tag="{Binding}" Click="PauseButton_Click"/>
+                    <Button Content="Cancel" Tag="{Binding}" Click="CancelButton_Click"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+      </DockPanel>
+    </Border>
+    <DockPanel Grid.Row="3" Margin="4,14,4,0">
+      <TextBlock x:Name="FooterText" Text="Ready" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+      <TextBlock x:Name="EngineText" Text="HTTP / HTTPS" Foreground="{StaticResource MutedBrush}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+    </DockPanel>
+  </Grid>
+</Window>
