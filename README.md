@@ -59,11 +59,11 @@ dotnet run --project .\src\Downora\Downora.csproj
 
 ## eD2k engine setup
 
-On Windows x64, click **Set up eD2k** in Downora. The bundled PowerShell helper downloads the official aMule 3.1.0 portable package, verifies its SHA-256 checksum, extracts it under `%LOCALAPPDATA%\\Downora\\Engine\\aMule`, configures the API to listen only on `127.0.0.1:4713`, generates random credentials, stores the API password in Windows Credential Manager, and starts the engine. Downora starts the installed daemon automatically on later launches.
+On Windows x64, click **Set up eD2k** in Downora. The bundled PowerShell helper downloads the official aMule 3.2.0 portable package, verifies its SHA-256 checksum, extracts it under `%LOCALAPPDATA%\\Downora\\Engine\\aMule`, configures the API to listen only on `127.0.0.1:4713`, generates random credentials, stores the API password in Windows Credential Manager, and starts the engine. Downora starts the installed daemon automatically on later launches.
 
 If aMule is already running, close it before setup so active transfers are not interrupted. Existing `amule.conf` settings are backed up once as `amule.conf.downora-backup`. The helper does not require administrator rights. The engine is downloaded on demand and is not bundled with Downora.
 
-aMule remains a separate GPL-2.0 application. Downora does not link its code; the setup helper retrieves the official portable distribution and verifies the published package hash. The current helper targets Windows x64 and pins aMule 3.1.0.
+aMule remains a separate GPL-2.0 application. Downora does not link its code; the setup helper retrieves the official portable distribution and verifies the published package hash. The helper targets Windows x64 and pins aMule 3.2.0, including its verified SHA-256. The first existing `amule.conf` is backed up as `amule.conf.downora-backup`; setup asks you to close a running aMule process rather than interrupting active transfers.
 
 ## Legal & safety
 
