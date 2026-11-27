@@ -75,7 +75,12 @@ public partial class MainWindow : Window
         StartDownload(item);
     }
 
-    private void StartDownload(DownloadItem item)\n    {\n        _downloadTasks.Add(RunDownloadAsync(item));\n    }\n\n    private async Task RunDownloadAsync(DownloadItem item)
+    private void StartDownload(DownloadItem item)
+    {
+        _downloadTasks.Add(RunDownloadAsync(item));
+    }
+
+    private async Task RunDownloadAsync(DownloadItem item)
     {
         var token = item.Token.Token;
         var partPath = item.TargetPath + ".part";
