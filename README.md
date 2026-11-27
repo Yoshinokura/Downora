@@ -16,6 +16,7 @@
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
+- Rejects credential-bearing URLs so passwords are not written into the persistent download queue
 - Safe filename handling and collision avoidance
 
 ## Run
@@ -39,6 +40,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] Basic queue persistence and recovery after app restart (unfinished tasks restore paused)
 - [x] Four-way HTTP segmented downloads for range-capable servers (16 MiB+ files)
 - [x] Basic anonymous FTP / explicit FTPS downloads
+- [x] Reject credential-bearing URLs to protect persisted queue data
 - [ ] Authenticated FTP / FTPS support
 - [ ] BitTorrent / Magnet adapter (libtorrent)
 - [ ] eD2k adapter (compatible, legally distributable engine)
