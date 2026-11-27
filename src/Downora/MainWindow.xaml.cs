@@ -59,9 +59,6 @@ public partial class MainWindow : Window
         {
             if (Ed2kFileLink.TryParse(raw, out var ed2k, out var parseError))
             {
-                var details = _chinese
-                    ? $"已识别 eD2k 文件链接\n文件：{ed2k!.FileName}\n大小：{FormatSize(ed2k.Size)}\nMD4 哈希：{ed2k.Hash}\n\n当前版本尚未接入 eD2k 网络引擎，暂时不能开始传输。"
-                    : $"eD2k file link recognized\nFile: {ed2k!.FileName}\nSize: {FormatSize(ed2k.Size)}\nMD4 hash: {ed2k.Hash}\n\nThe eD2k network engine is not integrated yet, so this file cannot be transferred in this build.";
                 var apiAddress = new Uri("http://127.0.0.1:4713/");
                 var savedCredential = WindowsCredentialStore.Read(apiAddress);
                 var password = savedCredential?.Password ?? PromptForAmulePassword();
@@ -73,8 +70,8 @@ public partial class MainWindow : Window
                     WindowsCredentialStore.Save(apiAddress, "admin", password);
                     FooterText.Text = _chinese ? "eD2k 任务已提交给 aMule" : "eD2k task sent to aMule";
                     MessageBox.Show(_chinese
-                        ? $"eD2k 任务已提交给本机 aMule 引擎。\\n\\n{ed2k!.FileName}"
-                        : $"The eD2k task was submitted to the local aMule engine.\\n\\n{ed2k!.FileName}",
+                        ? $"eD2k 任务已提交给本机 aMule 引擎。\n\n{ed2k!.FileName}"
+                        : $"The eD2k task was submitted to the local aMule engine.\n\n{ed2k!.FileName}",
                         "Downora", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (AmuleApiAuthenticationException)
@@ -96,8 +93,8 @@ public partial class MainWindow : Window
                 catch (Exception ex)
                 {
                     MessageBox.Show((_chinese
-                        ? "无法连接本机 aMule API。请安装并启动 aMule 3.1.0 或更新版本，并启用 amuleapi（默认端口 4713）。\\n\\n"
-                        : "Could not reach the local aMule API. Install and start aMule 3.1.0 or newer and enable amuleapi (default port 4713).\\n\\n")
+                        ? "无法连接本机 aMule API。请安装并启动 aMule 3.1.0 或更新版本，并启用 amuleapi（默认端口 4713）。\n\n"
+                        : "Could not reach the local aMule API. Install and start aMule 3.1.0 or newer and enable amuleapi (default port 4713).\n\n")
                         + ex.Message, "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
