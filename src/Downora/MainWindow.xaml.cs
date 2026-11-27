@@ -35,10 +35,10 @@ public partial class MainWindow : Window
     {
         _chinese = !_chinese;
         Subtitle.Text = _chinese ? "更简单的下载方式" : "A simpler way to download";
-        UrlBox.ToolTip = _chinese ? "粘贴 HTTP 或 HTTPS 下载链接" : "Paste an HTTP or HTTPS link";
+        UrlBox.ToolTip = _chinese ? "粘贴 HTTP、HTTPS、FTP 或 FTPS 下载链接" : "Paste an HTTP, HTTPS, FTP or FTPS link";
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
         FooterText.Text = _chinese ? "就绪" : "Ready";
-        EngineText.Text = _chinese ? "HTTP / HTTPS 下载引擎" : "HTTP / HTTPS engine";
+        EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS 下载引擎" : "HTTP / HTTPS / FTP / FTPS engine";
         SettingsButton.Content = _chinese ? "设置" : "Settings";
         foreach (var item in _items) item.RefreshLanguage(_chinese);
     }
@@ -54,9 +54,9 @@ public partial class MainWindow : Window
     {
         var raw = UrlBox.Text.Trim();
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeFtp && uri.Scheme != "ftps"))
         {
-            MessageBox.Show(_chinese ? "请输入有效的 HTTP 或 HTTPS 链接。" : "Enter a valid HTTP or HTTPS URL.",
+            MessageBox.Show(_chinese ? "请输入有效的 HTTP、HTTPS、FTP 或 FTPS 链接。" : "Enter a valid HTTP, HTTPS, FTP or FTPS URL.",
                 "Downora", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -90,6 +90,12 @@ public partial class MainWindow : Window
             item.Status = _chinese ? "等待下载槽位" : "Queued";
             await _slots.WaitAsync(token);
             enteredSlot = true;
+
+            if (item.Url.Scheme is "ftp" or "ftps")
+            {
+                await DownloadFtpAsync(item, partPath, token);
+                return;
+            }
 
             var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
             using var request = new HttpRequestMessage(HttpMethod.Get, item.Url);
@@ -161,6 +167,77 @@ public partial class MainWindow : Window
             if (enteredSlot) _slots.Release();
             UpdateQueueCount();
             SaveQueue();
+        }
+    }
+
+
+    private async Task DownloadFtpAsync(DownloadItem item, string partPath, CancellationToken token)
+    {
+        var isFtps = item.Url.Scheme == "ftps";
+        if (!string.IsNullOrEmpty(item.Url.UserInfo) &&
+            !item.Url.UserInfo.Equals("anonymous", StringComparison.OrdinalIgnoreCase) &&
+            !item.Url.UserInfo.StartsWith("anonymous:", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException(_chinese
+                ? "目前 FTP 仅支持匿名访问；为避免明文保存密码，暂不接受 URL 内嵌账号密码。"
+                : "FTP currently supports anonymous access only. Credentials in URLs are not accepted to avoid storing passwords in the queue.");
+
+        var builder = new UriBuilder(item.Url) { Scheme = Uri.UriSchemeFtp };
+        if (builder.Port == -1 || builder.Port == 990) builder.Port = isFtps ? 990 : 21;
+        builder.UserName = "anonymous";
+        builder.Password = "downora@localhost";
+        var request = (FtpWebRequest)WebRequest.Create(builder.Uri);
+        request.Method = WebRequestMethods.Ftp.DownloadFile;
+        request.UseBinary = true;
+        request.UsePassive = true;
+        request.EnableSsl = isFtps;
+        request.KeepAlive = false;
+        request.Credentials = new NetworkCredential("anonymous", "downora@localhost");
+
+        var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
+        if (offset > 0) request.ContentOffset = offset;
+
+        item.Status = _chinese ? (isFtps ? "正在连接 FTPS…" : "正在连接 FTP…")
+                               : (isFtps ? "Connecting to FTPS…" : "Connecting to FTP…");
+
+        using var cancellation = token.Register(request.Abort);
+        try
+        {
+            using var response = (FtpWebResponse)await request.GetResponseAsync();
+            await using var input = response.GetResponseStream();
+            await using var output = new FileStream(partPath, offset > 0 ? FileMode.Append : FileMode.Create,
+                FileAccess.Write, FileShare.None, 81920, true);
+
+            var total = response.ContentLength > 0 ? offset + response.ContentLength : -1;
+            var received = offset;
+            var started = DateTime.UtcNow;
+            var buffer = new byte[81920];
+            int read;
+            item.Status = _chinese ? "正在下载" : "Downloading";
+            while ((read = await input.ReadAsync(buffer, token)) > 0)
+            {
+                await output.WriteAsync(buffer.AsMemory(0, read), token);
+                received += read;
+                item.Progress = total > 0 ? Math.Min(100, received * 100d / total) : 0;
+                var seconds = Math.Max(0.1, (DateTime.UtcNow - started).TotalSeconds);
+                item.SpeedText = FormatSize((received - offset) / seconds) + "/s";
+                item.ProgressText = total > 0 ? $"{FormatSize(received)} / {FormatSize(total)}" : FormatSize(received);
+            }
+
+            await output.FlushAsync(token);
+            if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
+            File.Move(partPath, item.TargetPath);
+            item.Progress = 100;
+            item.IsPaused = false;
+            item.IsCancelled = false;
+            item.IsCompleted = true;
+            item.Status = _chinese ? "已完成" : "Completed";
+            item.SpeedText = "";
+            FooterText.Text = _chinese ? "下载完成" : "Download complete";
+            try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+        }
+        catch (WebException) when (token.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(token);
         }
     }
 
