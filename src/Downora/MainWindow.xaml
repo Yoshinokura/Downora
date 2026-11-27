@@ -1,7 +1,7 @@
 <Window x:Class="Downora.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Downora" Height="760" Width="1120" MinHeight="620" MinWidth="900"
+        Title="Downora" Closing="Window_Closing" Height="760" Width="1120" MinHeight="620" MinWidth="900"
         Background="{StaticResource SurfaceBrush}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen">
   <Grid Margin="26">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
