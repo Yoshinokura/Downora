@@ -8,4 +8,7 @@
     <RootNamespace>Downora</RootNamespace>
     <AssemblyName>Downora</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="..\..\scripts\Install-Ed2kEngine.ps1" Link="scripts\Install-Ed2kEngine.ps1" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
