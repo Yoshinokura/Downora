@@ -61,6 +61,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+        {
+            MessageBox.Show(_chinese
+                ? "出于安全考虑，请勿在下载链接中嵌入账号或密码。"
+                : "For security, credentials must not be embedded in download URLs.",
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var name = Path.GetFileName(uri.LocalPath);
         if (string.IsNullOrWhiteSpace(name)) name = "download-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
         name = Sanitize(Uri.UnescapeDataString(name));
@@ -373,7 +382,11 @@ public partial class MainWindow : Window
         var builder = new UriBuilder(item.Url) { Scheme = Uri.UriSchemeFtp };
         // This adapter implements explicit FTPS (AUTH TLS), which uses the FTP control port by default.
         // Implicit FTPS on port 990 is a different protocol and is not supported yet.
-        if (builder.Port == -1 || builder.Port == 990) builder.Port = 21;
+        if (builder.Port == 990)
+            throw new NotSupportedException(_chinese
+                ? "暂不支持隐式 FTPS（端口 990），请使用显式 FTPS（默认端口 21）。"
+                : "Implicit FTPS (port 990) is not supported. Use explicit FTPS (port 21 by default).");
+        if (builder.Port == -1) builder.Port = 21;
         builder.UserName = "anonymous";
         builder.Password = "downora@localhost";
         var request = (FtpWebRequest)WebRequest.Create(builder.Uri);
