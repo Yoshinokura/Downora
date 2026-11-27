@@ -21,6 +21,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Run automated tests
+        run: dotnet test tests/Downora.Tests/Downora.Tests.csproj --configuration Release
+
       - name: Publish self-contained Windows app
         run: dotnet publish src/Downora/Downora.csproj --configuration Release --runtime win-x64 --self-contained true --output publish
 
