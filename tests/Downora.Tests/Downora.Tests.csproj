@@ -16,6 +16,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\Downora\Downora.csproj" />
+    <ProjectReference Include="..\..\src\Downora\Downora.csproj" />
   </ItemGroup>
 </Project>
