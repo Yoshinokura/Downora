@@ -79,14 +79,14 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
 
         if (value.Length != 32) return false;
         var bytes = new byte[20];
-        var buffer = 0;
+        uint buffer = 0;
         var bits = 0;
         var output = 0;
         foreach (var character in value.ToUpperInvariant())
         {
             var index = Base32Alphabet.IndexOf(character);
             if (index < 0) return false;
-            buffer = (buffer << 5) | index;
+            buffer = (buffer << 5) | (uint)index;
             bits += 5;
             if (bits < 8) continue;
             bits -= 8;
