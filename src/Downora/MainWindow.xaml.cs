@@ -13,7 +13,8 @@ namespace Downora;
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<DownloadItem> _items = new();
-    private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All });
+    // Keep response bytes untouched: transparent decompression can invalidate byte offsets used by Range resume.
+    private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None });
     private readonly SemaphoreSlim _slots = new(3, 3);
     private bool _chinese;
     private readonly string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
@@ -88,6 +89,8 @@ public partial class MainWindow : Window
             response.EnsureSuccessStatusCode();
 
             var append = offset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+            if (append && response.Content.Headers.ContentRange?.From != offset)
+                throw new InvalidDataException("The server returned an unexpected byte range.");
             if (!append) offset = 0;
             var total = response.Content.Headers.ContentRange?.Length
                         ?? (response.Content.Headers.ContentLength is long length ? length + offset : null);
@@ -174,14 +177,22 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is DownloadItem item)
         {
+            // A paused task has no active stream to unwind, so it can be finalized immediately.
+            var wasPaused = item.IsPaused;
             item.IsCancelled = true;
             item.IsPaused = false;
             item.Token.Cancel();
-            TryDelete(item.TargetPath + ".part");
-            if (item.IsPaused)
+
+            if (wasPaused)
+            {
+                TryDelete(item.TargetPath + ".part");
                 item.Status = _chinese ? "已取消" : "Cancelled";
+            }
             else
+            {
+                // Let the active download release its file handle before deleting the partial file.
                 item.Status = _chinese ? "正在取消…" : "Cancelling…";
+            }
         }
     }
 
