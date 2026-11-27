@@ -37,10 +37,10 @@ public partial class MainWindow : Window
     {
         _chinese = !_chinese;
         Subtitle.Text = _chinese ? "更简单的下载方式" : "A simpler way to download";
-        UrlBox.ToolTip = _chinese ? "粘贴 HTTP、HTTPS、FTP 或 FTPS 下载链接" : "Paste an HTTP, HTTPS, FTP or FTPS link";
+        UrlBox.ToolTip = _chinese ? "粘贴 HTTP、HTTPS、FTP、FTPS 或 eD2k 链接" : "Paste an HTTP, HTTPS, FTP, FTPS or eD2k link";
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
         FooterText.Text = _chinese ? "就绪" : "Ready";
-        EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS 下载引擎" : "HTTP / HTTPS / FTP / FTPS engine";
+        EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS / eD2k 链接解析" : "HTTP / HTTPS / FTP / FTPS / eD2k link parsing";
         SettingsButton.Content = _chinese ? "设置" : "Settings";
         foreach (var item in _items) item.RefreshLanguage(_chinese);
     }
@@ -55,6 +55,23 @@ public partial class MainWindow : Window
     private void AddDownload()
     {
         var raw = UrlBox.Text.Trim();
+        if (raw.StartsWith("ed2k://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Ed2kFileLink.TryParse(raw, out var ed2k, out var parseError))
+            {
+                var details = _chinese
+                    ? $"已识别 eD2k 文件链接\n文件：{ed2k!.FileName}\n大小：{FormatSize(ed2k.Size)}\nMD4 哈希：{ed2k.Hash}\n\n当前版本尚未接入 eD2k 网络引擎，暂时不能开始传输。"
+                    : $"eD2k file link recognized\nFile: {ed2k!.FileName}\nSize: {FormatSize(ed2k.Size)}\nMD4 hash: {ed2k.Hash}\n\nThe eD2k network engine is not integrated yet, so this file cannot be transferred in this build.";
+                MessageBox.Show(details, "Downora", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show((_chinese ? "无效的 eD2k 链接：" : "Invalid eD2k link: ") + parseError,
+                    "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return;
+        }
+
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeFtp && uri.Scheme != "ftps"))
         {
