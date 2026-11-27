@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and anonymous FTP/explicit FTPS downloads, with a three-task concurrency limit. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, but the eD2k network transfer engine is not yet integrated. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are not yet implemented.
 
 ## Features
 
@@ -13,6 +13,7 @@
 - Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
 - FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with username/password stored in Windows Credential Manager; pause/resume where the server supports REST; implicit FTPS (port 990) is not supported
+- eD2k file-link parsing and validation (file name, size and 128-bit file hash); network transfer is not yet available
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
@@ -45,7 +46,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] Reject credential-bearing URLs to protect persisted queue data
 - [x] Authenticated FTP / FTPS support using Windows Credential Manager
 - [ ] BitTorrent / Magnet adapter (libtorrent)
-- [ ] eD2k adapter (compatible, legally distributable engine)
+- [ ] eD2k transfer adapter (compatible, legally distributable engine; link parser is implemented)
 - [ ] M3U8 download and remux workflow
 - [ ] Browser handoff / extension
 - [x] SHA-256 checksum calculation after completed downloads
