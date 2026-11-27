@@ -11,12 +11,16 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace Downora;
 
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<DownloadItem> _items = new();
+    private readonly ObservableCollection<Ed2kDownloadItem> _ed2kItems = new();
+    private readonly DispatcherTimer _ed2kRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private bool _ed2kPollInProgress;
     // Keep response bytes untouched: transparent decompression can invalidate byte offsets used by Range resume.
     private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None });
     private readonly SemaphoreSlim _slots = new(3, 3);
@@ -30,9 +34,13 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DownloadsList.ItemsSource = _items;
+        Ed2kDownloadsList.ItemsSource = _ed2kItems;
+        _ed2kRefreshTimer.Tick += async (_, _) => await RefreshEd2kQueueAsync();
+        _ed2kRefreshTimer.Start();
         Directory.CreateDirectory(_root);
         LoadQueue();
         EnsureEd2kEngineRunning();
+        _ = RefreshEd2kQueueAsync();
     }
 
     private void EnsureEd2kEngineRunning()
@@ -56,6 +64,87 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             FooterText.Text = _chinese ? "eD2k 引擎启动失败：" + ex.Message : "Could not start eD2k engine: " + ex.Message;
+        }
+    }
+
+    private async Task RefreshEd2kQueueAsync()
+    {
+        if (_ed2kPollInProgress) return;
+        var apiAddress = new Uri("http://127.0.0.1:4713/");
+        var credential = WindowsCredentialStore.Read(apiAddress);
+        if (credential is null) return;
+
+        _ed2kPollInProgress = true;
+        try
+        {
+            var downloads = await AmuleApiClient.GetDownloadsAsync(apiAddress, credential.Password);
+            var currentHashes = downloads.Select(x => x.Hash).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var stale in _ed2kItems.Where(x => !currentHashes.Contains(x.Hash)).ToList())
+                _ed2kItems.Remove(stale);
+
+            foreach (var download in downloads)
+            {
+                var item = _ed2kItems.FirstOrDefault(x => x.Hash.Equals(download.Hash, StringComparison.OrdinalIgnoreCase));
+                if (item is null)
+                {
+                    item = new Ed2kDownloadItem(download.Hash, _chinese);
+                    _ed2kItems.Insert(0, item);
+                }
+                item.Update(download, _chinese);
+            }
+        }
+        catch (AmuleApiAuthenticationException)
+        {
+            _ed2kRefreshTimer.Stop();
+            FooterText.Text = _chinese ? "aMule 密码已更改，请重新提交 eD2k 链接以更新凭据" : "aMule password changed; submit an eD2k link again to refresh credentials";
+        }
+        catch
+        {
+            // The engine may be starting, stopping, or temporarily unavailable; retry on the next tick.
+        }
+        finally
+        {
+            _ed2kPollInProgress = false;
+        }
+    }
+
+    private async void Ed2kPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not Ed2kDownloadItem item || item.IsFinished) return;
+        var credential = WindowsCredentialStore.Read(new Uri("http://127.0.0.1:4713/"));
+        if (credential is null) return;
+        try
+        {
+            var action = item.IsPaused ? "resume" : "pause";
+            await AmuleApiClient.SetDownloadActionAsync(new Uri("http://127.0.0.1:4713/"), credential.Password, item.Hash, action);
+            await RefreshEd2kQueueAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法控制 eD2k 任务：" : "Could not control eD2k task: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void Ed2kCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not Ed2kDownloadItem item) return;
+        if (MessageBox.Show(_chinese
+                ? $"确定取消并删除 aMule 中的任务及未完成数据吗？\\n\\n{item.FileName}"
+                : $"Cancel this aMule task and delete its incomplete data?\\n\\n{item.FileName}",
+                "Downora", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+        var credential = WindowsCredentialStore.Read(new Uri("http://127.0.0.1:4713/"));
+        if (credential is null) return;
+        try
+        {
+            await AmuleApiClient.RemoveDownloadAsync(new Uri("http://127.0.0.1:4713/"), credential.Password, item.Hash);
+            await RefreshEd2kQueueAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法删除 eD2k 任务：" : "Could not remove eD2k task: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -93,6 +182,9 @@ public partial class MainWindow : Window
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
         FooterText.Text = _chinese ? "就绪" : "Ready";
         EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS / eD2k 链接解析" : "HTTP / HTTPS / FTP / FTPS / eD2k link parsing";
+        HttpTab.Header = _chinese ? "普通下载" : "Direct downloads";
+        Ed2kTab.Header = _chinese ? "eD2k 下载" : "eD2k downloads";
+        foreach (var item in _ed2kItems) item.RefreshLanguage(_chinese);
         SettingsButton.Content = _chinese ? "设置" : "Settings";
         Ed2kSetupButton.Content = _chinese ? "一键配置 eD2k" : "Set up eD2k";
         foreach (var item in _items) item.RefreshLanguage(_chinese);
@@ -892,4 +984,74 @@ public sealed class DownloadItem : INotifyPropertyChanged
 
     private void OnChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+public sealed class Ed2kDownloadItem : INotifyPropertyChanged
+{
+    public string Hash { get; }
+    public string FileName { get; private set; } = "";
+    public string Status { get; private set; } = "";
+    public double Progress { get; private set; }
+    public string ProgressText { get; private set; } = "0%";
+    public string SpeedText { get; private set; } = "";
+    public string SourcesText { get; private set; } = "";
+    public string ActionText { get; private set; } = "Pause";
+    public bool IsPaused { get; private set; }
+    public bool IsFinished { get; private set; }
+    private bool _chinese;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public Ed2kDownloadItem(string hash, bool chinese) { Hash = hash; _chinese = chinese; }
+
+    public void Update(AmuleDownload download, bool chinese)
+    {
+        _chinese = chinese;
+        FileName = download.Name;
+        Progress = download.ProgressPercent;
+        ProgressText = download.SizeBytes > 0
+            ? $"{Progress:0.0}% · {Format(download.CompletedBytes)} / {Format(download.SizeBytes)}"
+            : $"{Progress:0.0}%";
+        SpeedText = download.SpeedBytesPerSecond > 0 ? Format(download.SpeedBytesPerSecond) + "/s" : "";
+        SourcesText = chinese ? $"来源：{download.SourceCount}" : $"Sources: {download.SourceCount}";
+        IsPaused = download.Status is "paused" or "stopped";
+        IsFinished = download.Status is "completed" or "completing";
+        Status = LocalizeStatus(download.Status, chinese);
+        ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
+        NotifyAll();
+    }
+
+    public void RefreshLanguage(bool chinese)
+    {
+        _chinese = chinese;
+        ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
+        NotifyAll();
+    }
+
+    private static string LocalizeStatus(string status, bool chinese) => status switch
+    {
+        "downloading" => chinese ? "正在下载" : "Downloading",
+        "waiting" => chinese ? "等待来源" : "Waiting for sources",
+        "paused" => chinese ? "已暂停" : "Paused",
+        "stopped" => chinese ? "已停止" : "Stopped",
+        "hashing" => chinese ? "正在校验" : "Hashing",
+        "allocating" => chinese ? "正在分配空间" : "Allocating",
+        "completing" => chinese ? "正在完成" : "Completing",
+        "completed" => chinese ? "已完成" : "Completed",
+        "erroneous" => chinese ? "错误" : "Error",
+        "insufficient_disk" => chinese ? "磁盘空间不足" : "Insufficient disk space",
+        _ => status
+    };
+
+    private static string Format(double bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var index = 0;
+        while (bytes >= 1024 && index < units.Length - 1) { bytes /= 1024; index++; }
+        return $"{bytes:0.##} {units[index]}";
+    }
+
+    private void NotifyAll()
+    {
+        foreach (var name in new[] { nameof(FileName), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(SourcesText), nameof(ActionText), nameof(IsPaused), nameof(IsFinished) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
 }
