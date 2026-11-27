@@ -24,7 +24,7 @@ public sealed class MagnetLinkTests
     public void ParsesBase32InfoHash()
     {
         var parsed = MagnetLink.TryParse(
-            "magnet:?xt=urn:btih=AERUKZ4JVPG66AJDIVTYTK6N54ASGRLH",
+            "magnet:?xt=urn:btih:AERUKZ4JVPG66AJDIVTYTK6N54ASGRLH",
             out var magnet, out var error);
 
         Assert.True(parsed, error);
