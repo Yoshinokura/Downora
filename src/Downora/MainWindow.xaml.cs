@@ -97,6 +97,9 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (await TryDownloadSegmentedAsync(item, partPath, token))
+                return;
+
             var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
             item.Status = _chinese ? "正在连接…" : "Connecting…";
             using var response = await SendHttpWithRetryAsync(item.Url, offset, item, token);
@@ -168,6 +171,155 @@ public partial class MainWindow : Window
     }
 
 
+
+
+    private async Task<bool> TryDownloadSegmentedAsync(DownloadItem item, string partPath, CancellationToken token)
+    {
+        const int segmentCount = 4;
+        const long minimumSize = 16L * 1024 * 1024;
+
+        using var head = new HttpRequestMessage(HttpMethod.Head, item.Url);
+        using var metadata = await _http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!metadata.IsSuccessStatusCode ||
+            metadata.Content.Headers.ContentLength is not long total ||
+            total < minimumSize ||
+            !metadata.Headers.AcceptRanges.Any(x => x.Equals("bytes", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var segmentSize = (total + segmentCount - 1) / segmentCount;
+        var segmentPaths = Enumerable.Range(0, segmentCount)
+            .Select(index => partPath + $".seg{index}")
+            .ToArray();
+
+        try
+        {
+            item.Status = _chinese ? "正在准备分段下载…" : "Preparing segmented download…";
+            long initialReceived = 0;
+            for (var i = 0; i < segmentCount; i++)
+            {
+                var start = i * segmentSize;
+                var end = Math.Min(total - 1, start + segmentSize - 1);
+                if (start > end) continue;
+                var length = end - start + 1;
+                var existing = File.Exists(segmentPaths[i]) ? new FileInfo(segmentPaths[i]).Length : 0;
+                if (existing > length)
+                {
+                    TryDelete(segmentPaths[i]);
+                    existing = 0;
+                }
+                initialReceived += existing;
+            }
+
+            long receivedOverall = initialReceived;
+            var started = DateTime.UtcNow;
+            var workers = Enumerable.Range(0, segmentCount).Select(async index =>
+            {
+                var start = index * segmentSize;
+                var end = Math.Min(total - 1, start + segmentSize - 1);
+                if (start > end) return;
+                var expected = end - start + 1;
+                var path = segmentPaths[index];
+                var existing = File.Exists(path) ? new FileInfo(path).Length : 0;
+                if (existing == expected) return;
+
+                var requestStart = start + existing;
+                using var request = new HttpRequestMessage(HttpMethod.Get, item.Url);
+                request.Headers.Range = new RangeHeaderValue(requestStart, end);
+                using var response = await SendHttpRangeWithRetryAsync(request, item, token);
+                if (response.StatusCode != HttpStatusCode.PartialContent ||
+                    response.Content.Headers.ContentRange?.From != requestStart ||
+                    response.Content.Headers.ContentRange?.To is not long responseEnd ||
+                    responseEnd > end)
+                    throw new InvalidDataException("The server did not honor a segmented byte-range request.");
+
+                await using var input = await response.Content.ReadAsStreamAsync(token);
+                await using var output = new FileStream(path, existing > 0 ? FileMode.Append : FileMode.Create,
+                    FileAccess.Write, FileShare.None, 81920, true);
+                var buffer = new byte[81920];
+                int read;
+                while ((read = await input.ReadAsync(buffer, token)) > 0)
+                {
+                    await output.WriteAsync(buffer.AsMemory(0, read), token);
+                    var now = Interlocked.Add(ref receivedOverall, read);
+                    var seconds = Math.Max(0.1, (DateTime.UtcNow - started).TotalSeconds);
+                    item.Progress = Math.Min(99.9, now * 100d / total);
+                    item.ProgressText = $"{FormatSize(now)} / {FormatSize(total)}";
+                    item.SpeedText = FormatSize((now - initialReceived) / seconds) + "/s";
+                }
+                await output.FlushAsync(token);
+                if (new FileInfo(path).Length != expected)
+                    throw new EndOfStreamException("A segmented response ended before the requested range was complete.");
+            }).ToArray();
+
+            item.Status = _chinese ? "正在分段下载" : "Downloading in segments";
+            await Task.WhenAll(workers);
+
+            await using (var combined = new FileStream(partPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+            {
+                var buffer = new byte[81920];
+                foreach (var path in segmentPaths)
+                {
+                    await using var segment = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+                    int read;
+                    while ((read = await segment.ReadAsync(buffer, token)) > 0)
+                        await combined.WriteAsync(buffer.AsMemory(0, read), token);
+                }
+                await combined.FlushAsync(token);
+            }
+
+            if (new FileInfo(partPath).Length != total)
+                throw new InvalidDataException("The assembled segmented download has an unexpected length.");
+
+            foreach (var path in segmentPaths) TryDelete(path);
+            if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
+            File.Move(partPath, item.TargetPath);
+            item.Progress = 100;
+            item.ProgressText = FormatSize(total);
+            item.SpeedText = "";
+            item.IsPaused = false;
+            item.IsCancelled = false;
+            item.IsCompleted = true;
+            item.Status = _chinese ? "已完成" : "Completed";
+            FooterText.Text = _chinese ? "下载完成" : "Download complete";
+            try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+            return true;
+        }
+        catch
+        {
+            if (item.IsCancelled)
+            {
+                foreach (var path in segmentPaths) TryDelete(path);
+            }
+            throw;
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendHttpRangeWithRetryAsync(
+        HttpRequestMessage request, DownloadItem item, CancellationToken token)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var retryRequest = new HttpRequestMessage(HttpMethod.Get, request.RequestUri);
+            retryRequest.Headers.Range = request.Headers.Range;
+            try
+            {
+                var response = await _http.SendAsync(retryRequest, HttpCompletionOption.ResponseHeadersRead, token);
+                var transient = response.StatusCode == HttpStatusCode.RequestTimeout ||
+                                (int)response.StatusCode == 429 ||
+                                (int)response.StatusCode >= 500;
+                if (!transient || attempt >= maxAttempts)
+                    return response;
+                response.Dispose();
+            }
+            catch (HttpRequestException) when (attempt < maxAttempts && !token.IsCancellationRequested)
+            {
+            }
+
+            item.Status = _chinese ? "分段连接失败，正在重试…" : "Segment connection failed, retrying…";
+            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), token);
+        }
+    }
 
     private async Task<HttpResponseMessage> SendHttpWithRetryAsync(
         Uri url, long offset, DownloadItem item, CancellationToken token)
