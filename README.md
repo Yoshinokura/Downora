@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and anonymous FTP/explicit FTPS downloads, with a three-task concurrency limit. HTTP Range and FTP REST resume are attempted when supported by the server. Authenticated FTP, BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and anonymous FTP/explicit FTPS downloads, with a three-task concurrency limit. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are not yet implemented.
 
 ## Features
 
@@ -12,12 +12,13 @@
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
 - Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
-- Anonymous FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with pause/resume where the server supports REST; FTP credentials and implicit FTPS (port 990) are not yet supported
+- FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with username/password stored in Windows Credential Manager; pause/resume where the server supports REST; implicit FTPS (port 990) is not supported
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
 - Automatic SHA-256 checksum calculation and display after successful downloads
 - Rejects credential-bearing URLs so passwords are not written into the persistent download queue
+- Stores FTP / FTPS credentials in Windows Credential Manager rather than the queue file
 - Safe filename handling and collision avoidance
 
 ## Run
@@ -42,7 +43,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] Four-way HTTP segmented downloads for range-capable servers (16 MiB+ files)
 - [x] Basic anonymous FTP / explicit FTPS downloads
 - [x] Reject credential-bearing URLs to protect persisted queue data
-- [ ] Authenticated FTP / FTPS support
+- [x] Authenticated FTP / FTPS support using Windows Credential Manager
 - [ ] BitTorrent / Magnet adapter (libtorrent)
 - [ ] eD2k adapter (compatible, legally distributable engine)
 - [ ] M3U8 download and remux workflow
