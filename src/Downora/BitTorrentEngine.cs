@@ -124,7 +124,7 @@ public sealed class BitTorrentEngine : IAsyncDisposable
     }
 
     private static string GetInfoHash(TorrentManager manager) =>
-        manager.Torrent?.InfoHash.ToString() ?? manager.MagnetLink.InfoHash.ToString();
+        manager.Torrent?.InfoHashes.V1OrV2.ToString() ?? manager.MagnetLink.InfoHashes.V1OrV2.ToString();
 
     private static BitTorrentTaskSnapshot CreateSnapshot(TorrentManager manager)
     {
@@ -135,8 +135,8 @@ public sealed class BitTorrentEngine : IAsyncDisposable
             string.IsNullOrWhiteSpace(manager.Name) ? infoHash : manager.Name,
             manager.Progress,
             size,
-            manager.Monitor.DownloadSpeed,
-            manager.Monitor.UploadSpeed,
+            manager.Monitor.DownloadRate,
+            manager.Monitor.UploadRate,
             manager.OpenConnections,
             manager.State.ToString(),
             manager.Complete);
