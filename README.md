@@ -10,6 +10,7 @@
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
+- Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
 - Anonymous FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with pause/resume where the server supports REST; FTP credentials and implicit FTPS (port 990) are not yet supported
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
@@ -36,7 +37,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] English / 简体中文 UI
 - [x] Category-based save folders
 - [x] Basic queue persistence and recovery after app restart (unfinished tasks restore paused)
-- [ ] Multi-connection segmented downloads
+- [x] Four-way HTTP segmented downloads for range-capable servers (16 MiB+ files)
 - [x] Basic anonymous FTP / explicit FTPS downloads
 - [ ] Authenticated FTP / FTPS support
 - [ ] BitTorrent / Magnet adapter (libtorrent)
