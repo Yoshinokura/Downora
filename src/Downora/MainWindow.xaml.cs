@@ -128,7 +128,7 @@ public partial class MainWindow : Window
 
     private async void Ed2kCancelButton_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is not Ed2kDownloadItem item) return;
+        if ((sender as FrameworkElement)?.Tag is not Ed2kDownloadItem item || item.IsFinished) return;
         if (MessageBox.Show(_chinese
                 ? $"确定取消并删除 aMule 中的任务及未完成数据吗？\\n\\n{item.FileName}"
                 : $"Cancel this aMule task and delete its incomplete data?\\n\\n{item.FileName}",
@@ -997,6 +997,7 @@ public sealed class Ed2kDownloadItem : INotifyPropertyChanged
     public string ActionText { get; private set; } = "Pause";
     public bool IsPaused { get; private set; }
     public bool IsFinished { get; private set; }
+    public bool CanControl => !IsFinished;
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -1051,7 +1052,7 @@ public sealed class Ed2kDownloadItem : INotifyPropertyChanged
 
     private void NotifyAll()
     {
-        foreach (var name in new[] { nameof(FileName), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(SourcesText), nameof(ActionText), nameof(IsPaused), nameof(IsFinished) })
+        foreach (var name in new[] { nameof(FileName), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(SourcesText), nameof(ActionText), nameof(IsPaused), nameof(IsFinished), nameof(CanControl) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
