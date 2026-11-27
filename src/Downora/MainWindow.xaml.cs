@@ -155,9 +155,12 @@ public partial class MainWindow : Window
 
         if (item.IsPaused)
         {
+            if (!(item.Status.StartsWith("Paused", StringComparison.Ordinal) || item.Status.StartsWith("已暂停", StringComparison.Ordinal)))
+                return;
             item.IsPaused = false;
             item.IsCancelled = false;
             item.ResetToken();
+            item.Status = _chinese ? "等待继续…" : "Resuming…";
             _ = RunDownloadAsync(item);
         }
         else
@@ -232,12 +235,13 @@ public sealed class DownloadItem : INotifyPropertyChanged
     public string FileName => Path.GetFileName(TargetPath);
     public bool IsPaused { get; set; }
     public bool IsCancelled { get; set; }
+    private bool _chinese;
     private string _status;
     private double _progress;
     private string _progressText = "0%";
     private string _speedText = "";
     private string _actionText = "Pause";
-    public string Status { get => _status; set { _status = value; OnChanged(); } }
+    public string Status { get => _status; set { _status = value; OnChanged(); ActionText = IsPaused && (value.StartsWith("Paused", StringComparison.Ordinal) || value.StartsWith("已暂停", StringComparison.Ordinal)) ? (_chinese ? "继续" : "Resume") : (_chinese ? "暂停" : "Pause"); } }
     public double Progress { get => _progress; set { _progress = value; ProgressText = $"{value:0}%"; OnChanged(); } }
     public string ProgressText { get => _progressText; set { _progressText = value; OnChanged(); } }
     public string SpeedText { get => _speedText; set { _speedText = value; OnChanged(); } }
@@ -249,6 +253,7 @@ public sealed class DownloadItem : INotifyPropertyChanged
         Url = url;
         TargetPath = path;
         _status = chinese ? "等待中" : "Queued";
+        _chinese = chinese;
         RefreshLanguage(chinese);
     }
 
@@ -260,7 +265,9 @@ public sealed class DownloadItem : INotifyPropertyChanged
 
     public void RefreshLanguage(bool chinese)
     {
-        ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
+        _chinese = chinese;
+        ActionText = IsPaused && (Status.StartsWith("Paused", StringComparison.Ordinal) || Status.StartsWith("已暂停", StringComparison.Ordinal))
+            ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
         if (Status == "Queued" || Status == "等待中")
             Status = chinese ? "等待中" : "Queued";
         else if (Status.StartsWith("Paused", StringComparison.Ordinal) || Status.StartsWith("已暂停", StringComparison.Ordinal))
