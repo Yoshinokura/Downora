@@ -13,7 +13,11 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
             !uri.Scheme.Equals("magnet", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var parameters = ParseQuery(uri.Query);
+        var queryStart = value.IndexOf('?');
+        var query = queryStart >= 0 ? value[(queryStart + 1)..] : string.Empty;
+        var fragmentStart = query.IndexOf('#');
+        if (fragmentStart >= 0) query = query[..fragmentStart];
+        var parameters = ParseQuery(query);
         if (!parameters.TryGetValue("xt", out var exactTopics))
         {
             error = "The magnet link does not contain an exact topic (xt).";
