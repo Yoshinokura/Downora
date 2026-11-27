@@ -2,14 +2,14 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development scaffold. The current prototype implements queued HTTP/HTTPS downloads. FTP, BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are planned modules, not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads with a three-task concurrency limit and HTTP Range-based resume when supported by the server. FTP, BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are planned modules, not yet implemented.
 
 ## Features
 
 - Windows 10/11 x64 desktop app (WPF, .NET 8)
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch
-- HTTP/HTTPS downloads with progress, pause/cancel, queue and speed display
+- HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
 - Safe filename handling and collision avoidance
@@ -29,10 +29,10 @@ dotnet run --project .\src\Downora\Downora.csproj
 ## Roadmap
 
 - [x] HTTP/HTTPS single-file downloads with progress
-- [x] Queue, pause and cancel controls
+- [x] Queue, pause/resume and cancel controls (HTTP Range resume where supported)
 - [x] English / 简体中文 UI
 - [x] Category-based save folders
-- [ ] Multi-connection segmented downloads and robust resume
+- [ ] Multi-connection segmented downloads and persisted queue recovery after app restart
 - [ ] FTP / FTPS adapter
 - [ ] BitTorrent / Magnet adapter (libtorrent)
 - [ ] eD2k adapter (compatible, legally distributable engine)
