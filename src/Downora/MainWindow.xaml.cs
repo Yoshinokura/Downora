@@ -284,6 +284,13 @@ public partial class MainWindow : Window
             try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
             return true;
         }
+        catch (InvalidDataException)
+        {
+            // A server may advertise byte ranges but fail to honor a specific range request.
+            // Discard segmented fragments and let the caller fall back to a normal HTTP transfer.
+            foreach (var path in segmentPaths) TryDelete(path);
+            return false;
+        }
         catch
         {
             if (item.IsCancelled)
