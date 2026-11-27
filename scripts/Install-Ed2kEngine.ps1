@@ -54,7 +54,7 @@ public static class DownoraCredentialWriter {
                 CredentialBlob = blob, CredentialBlobSize = (uint)bytes.Length, Persist = 2 };
             if (!CredWrite(ref credential, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
         } finally {
-            CryptographicOperations.ZeroMemory(bytes);
+            Array.Clear(bytes, 0, bytes.Length);
             for (int i = 0; i < Encoding.Unicode.GetByteCount(password); i++) Marshal.WriteByte(blob, i, 0);
             Marshal.FreeHGlobal(blob);
         }
@@ -92,9 +92,17 @@ try {
     } else { Write-Step "Using the existing Downora aMule engine" }
 
     Write-Step "Preparing a private local API connection"
-    $ecPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-    $apiPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-    $md5 = [Convert]::ToHexString([Security.Cryptography.MD5]::HashData([Text.Encoding]::UTF8.GetBytes($ecPassword))).ToLowerInvariant()
+    $random = [Security.Cryptography.RandomNumberGenerator]::Create()
+    $ecBytes = New-Object byte[] 32
+    $apiBytes = New-Object byte[] 32
+    $random.GetBytes($ecBytes)
+    $random.GetBytes($apiBytes)
+    $ecPassword = ([BitConverter]::ToString($ecBytes)).Replace("-", "")
+    $apiPassword = ([BitConverter]::ToString($apiBytes)).Replace("-", "")
+    $md5Provider = [Security.Cryptography.MD5]::Create()
+    $md5 = ([BitConverter]::ToString($md5Provider.ComputeHash([Text.Encoding]::UTF8.GetBytes($ecPassword)))).Replace("-", "").ToLowerInvariant()
+    $random.Dispose()
+    $md5Provider.Dispose()
     $configPath = Join-Path $configDir "amule.conf"
     $lines = [System.Collections.Generic.List[string]]::new()
     if (Test-Path $configPath) { foreach ($line in [IO.File]::ReadAllLines($configPath)) { $lines.Add($line) } }
@@ -112,8 +120,7 @@ try {
     $passwordProcess = [Diagnostics.Process]::new()
     $passwordProcess.StartInfo = [Diagnostics.ProcessStartInfo]::new()
     $passwordProcess.StartInfo.FileName = $api.FullName
-    $passwordProcess.StartInfo.ArgumentList.Add("--config-dir=$configDir")
-    $passwordProcess.StartInfo.ArgumentList.Add("--set-admin-pass-stdin")
+    $passwordProcess.StartInfo.Arguments = '--config-dir="' + $configDir + '" --set-admin-pass-stdin'
     $passwordProcess.StartInfo.WorkingDirectory = Split-Path -Parent $api.FullName
     $passwordProcess.StartInfo.UseShellExecute = $false
     $passwordProcess.StartInfo.RedirectStandardInput = $true
@@ -132,7 +139,7 @@ try {
     if (-not (Get-Process -Name "amuled" -ErrorAction SilentlyContinue)) {
         $startInfo = [Diagnostics.ProcessStartInfo]::new()
         $startInfo.FileName = $amuled.FullName
-        $startInfo.ArgumentList.Add("--full-daemon")
+        $startInfo.Arguments = "--full-daemon"
         $startInfo.WorkingDirectory = Split-Path -Parent $amuled.FullName
         $startInfo.UseShellExecute = $false
         $startInfo.CreateNoWindow = $true
