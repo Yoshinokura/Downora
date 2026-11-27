@@ -24,6 +24,16 @@ jobs:
       - name: Publish self-contained Windows app
         run: dotnet publish src/Downora/Downora.csproj --configuration Release --runtime win-x64 --self-contained true --output publish
 
+      - name: Validate bundled eD2k setup script
+        shell: pwsh
+        run: |
+          $script = Get-Content scripts/Install-Ed2kEngine.ps1 -Raw
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseInput($script, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }
+          if (-not (Test-Path publish/scripts/Install-Ed2kEngine.ps1)) { throw 'The eD2k setup script was not included in the published app.' }
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
