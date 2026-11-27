@@ -74,12 +74,21 @@ $baseDir = Join-Path $env:LOCALAPPDATA "Downora\Engine\aMule"
 $configDir = Join-Path $env:APPDATA "aMule"
 $tempDir = Join-Path $env:TEMP ("Downora-aMule-" + [Guid]::NewGuid().ToString("N"))
 $archivePath = Join-Path $tempDir $archiveName
+$versionMarker = Join-Path $baseDir ".downora-amule-version"
 New-Item -ItemType Directory -Force -Path $tempDir, $baseDir, $configDir | Out-Null
 
 try {
+    if (Get-Process -Name "amuled", "amule" -ErrorAction SilentlyContinue) {
+        throw "Please exit the currently running aMule window or daemon, then run this setup again. Existing transfers will not be stopped automatically."
+    }
+
+    $installedVersion = if (Test-Path $versionMarker) { (Get-Content -LiteralPath $versionMarker -Raw).Trim() } else { "" }
     $amuled = Get-ChildItem -Path $baseDir -Filter "amuled.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     $api = Get-ChildItem -Path $baseDir -Filter "amuleapi.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $amuled -or -not $api) {
+    if (-not $amuled -or -not $api -or $installedVersion -ne $version) {
+        if (Test-Path $baseDir) {
+            Get-ChildItem -LiteralPath $baseDir -Force | Remove-Item -Recurse -Force
+        }
         Write-Step "Downloading the official aMule $version portable package"
         Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
         $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
@@ -89,11 +98,8 @@ try {
         $amuled = Get-ChildItem -Path $baseDir -Filter "amuled.exe" -Recurse | Select-Object -First 1
         $api = Get-ChildItem -Path $baseDir -Filter "amuleapi.exe" -Recurse | Select-Object -First 1
         if (-not $amuled -or -not $api) { throw "The verified archive does not contain both amuled.exe and amuleapi.exe." }
-    } else { Write-Step "Using the existing Downora aMule engine" }
-
-    if (Get-Process -Name "amuled", "amule" -ErrorAction SilentlyContinue) {
-        throw "Please exit the currently running aMule window or daemon, then run this setup again. Existing transfers will not be stopped automatically."
-    }
+        Set-Content -LiteralPath $versionMarker -Value $version -NoNewline
+    } else { Write-Step "Using the existing Downora aMule $version engine" }
 
     Write-Step "Preparing a private local API connection"
     $random = [Security.Cryptography.RandomNumberGenerator]::Create()
