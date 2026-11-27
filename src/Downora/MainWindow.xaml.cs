@@ -181,7 +181,9 @@ public partial class MainWindow : Window
                 : "FTP currently supports anonymous access only. Credentials in URLs are not accepted to avoid storing passwords in the queue.");
 
         var builder = new UriBuilder(item.Url) { Scheme = Uri.UriSchemeFtp };
-        if (builder.Port == -1 || builder.Port == 990) builder.Port = isFtps ? 990 : 21;
+        // This adapter implements explicit FTPS (AUTH TLS), which uses the FTP control port by default.
+        // Implicit FTPS on port 990 is a different protocol and is not supported yet.
+        if (builder.Port == -1 || builder.Port == 990) builder.Port = 21;
         builder.UserName = "anonymous";
         builder.Password = "downora@localhost";
         var request = (FtpWebRequest)WebRequest.Create(builder.Uri);
