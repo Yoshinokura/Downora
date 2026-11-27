@@ -10,6 +10,7 @@
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
+- Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
 - Safe filename handling and collision avoidance
@@ -32,7 +33,8 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] Queue, pause/resume and cancel controls (HTTP Range resume where supported)
 - [x] English / 简体中文 UI
 - [x] Category-based save folders
-- [ ] Multi-connection segmented downloads and persisted queue recovery after app restart
+- [x] Basic queue persistence and recovery after app restart (unfinished tasks restore paused)
+- [ ] Multi-connection segmented downloads
 - [ ] FTP / FTPS adapter
 - [ ] BitTorrent / Magnet adapter (libtorrent)
 - [ ] eD2k adapter (compatible, legally distributable engine)
