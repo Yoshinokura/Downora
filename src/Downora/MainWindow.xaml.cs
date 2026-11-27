@@ -1003,7 +1003,7 @@ public sealed class Ed2kDownloadItem : INotifyPropertyChanged
 
     public Ed2kDownloadItem(string hash, bool chinese) { Hash = hash; _chinese = chinese; }
 
-    public void Update(AmuleDownload download, bool chinese)
+    internal void Update(AmuleDownload download, bool chinese)
     {
         _chinese = chinese;
         FileName = download.Name;
