@@ -37,7 +37,7 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
 
         if (infoHash is null)
         {
-            error = "The magnet link must contain a valid 40-character hex or 32-character base32 BitTorrent info hash.";
+            error = "No valid btih topic found. Parsed xt values: " + string.Join(" | ", exactTopics.Select(topic => $"{topic} (length {topic.Length})"));
             return false;
         }
 
