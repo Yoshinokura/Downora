@@ -52,7 +52,7 @@ public partial class MainWindow : Window
 
     private void AddButton_Click(object sender, RoutedEventArgs e) => AddDownload();
 
-    private void AddDownload()
+    private async void AddDownload()
     {
         var raw = UrlBox.Text.Trim();
         if (raw.StartsWith("ed2k://", StringComparison.OrdinalIgnoreCase))
@@ -62,7 +62,44 @@ public partial class MainWindow : Window
                 var details = _chinese
                     ? $"已识别 eD2k 文件链接\n文件：{ed2k!.FileName}\n大小：{FormatSize(ed2k.Size)}\nMD4 哈希：{ed2k.Hash}\n\n当前版本尚未接入 eD2k 网络引擎，暂时不能开始传输。"
                     : $"eD2k file link recognized\nFile: {ed2k!.FileName}\nSize: {FormatSize(ed2k.Size)}\nMD4 hash: {ed2k.Hash}\n\nThe eD2k network engine is not integrated yet, so this file cannot be transferred in this build.";
-                MessageBox.Show(details, "Downora", MessageBoxButton.OK, MessageBoxImage.Information);
+                var apiAddress = new Uri("http://127.0.0.1:4713/");
+                var savedCredential = WindowsCredentialStore.Read(apiAddress);
+                var password = savedCredential?.Password ?? PromptForAmulePassword();
+                if (password is null) return;
+
+                try
+                {
+                    await AmuleApiClient.AddLinkAsync(apiAddress, password, raw);
+                    WindowsCredentialStore.Save(apiAddress, "admin", password);
+                    FooterText.Text = _chinese ? "eD2k 任务已提交给 aMule" : "eD2k task sent to aMule";
+                    MessageBox.Show(_chinese
+                        ? $"eD2k 任务已提交给本机 aMule 引擎。\\n\\n{ed2k!.FileName}"
+                        : $"The eD2k task was submitted to the local aMule engine.\\n\\n{ed2k!.FileName}",
+                        "Downora", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (AmuleApiAuthenticationException)
+                {
+                    var retryPassword = PromptForAmulePassword();
+                    if (retryPassword is null) return;
+                    try
+                    {
+                        await AmuleApiClient.AddLinkAsync(apiAddress, retryPassword, raw);
+                        WindowsCredentialStore.Save(apiAddress, "admin", retryPassword);
+                        FooterText.Text = _chinese ? "eD2k 任务已提交给 aMule" : "eD2k task sent to aMule";
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show((_chinese ? "无法提交 eD2k 任务：" : "Could not submit eD2k task: ") + ex.Message,
+                            "Downora", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show((_chinese
+                        ? "无法连接本机 aMule API。请安装并启动 aMule 3.1.0 或更新版本，并启用 amuleapi（默认端口 4713）。\\n\\n"
+                        : "Could not reach the local aMule API. Install and start aMule 3.1.0 or newer and enable amuleapi (default port 4713).\\n\\n")
+                        + ex.Message, "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
             }
             else
             {
@@ -117,6 +154,45 @@ public partial class MainWindow : Window
         UrlBox.Clear();
         SaveQueue();
         StartDownload(item);
+    }
+
+    private string? PromptForAmulePassword()
+    {
+        var dialog = new Window
+        {
+            Title = _chinese ? "aMule 管理员密码" : "aMule administrator password",
+            Owner = this,
+            Width = 390,
+            Height = 190,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Background = System.Windows.Media.Brushes.White
+        };
+
+        var password = new PasswordBox { Margin = new Thickness(0, 8, 0, 16), Height = 30 };
+        var submit = new Button { Content = _chinese ? "连接并提交" : "Connect and submit", MinWidth = 120, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = _chinese ? "取消" : "Cancel", MinWidth = 80, IsCancel = true };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        buttons.Children.Add(submit);
+        buttons.Children.Add(cancel);
+        var panel = new StackPanel { Margin = new Thickness(22) };
+        panel.Children.Add(new TextBlock { Text = _chinese ? "输入本机 aMule API 管理员密码" : "Enter the local aMule API administrator password" });
+        panel.Children.Add(password);
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+
+        string? result = null;
+        submit.Click += (_, _) =>
+        {
+            if (string.IsNullOrEmpty(password.Password))
+            {
+                MessageBox.Show(_chinese ? "请输入密码。" : "Enter the password.", "Downora");
+                return;
+            }
+            result = password.Password;
+            dialog.DialogResult = true;
+        };
+        return dialog.ShowDialog() == true ? result : null;
     }
 
     private NetworkCredential? PromptForFtpCredentials()
