@@ -96,7 +96,7 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
             bits -= 8;
             if (output >= bytes.Length) return false;
             bytes[output++] = (byte)((buffer >> bits) & 0xff);
-            buffer &= (1 << bits) - 1;
+            buffer &= (uint)((1 << bits) - 1);
         }
 
         if (output != 20 || bits != 0) return false;
