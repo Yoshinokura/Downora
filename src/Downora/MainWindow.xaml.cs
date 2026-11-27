@@ -175,8 +175,7 @@ public partial class MainWindow : Window
     {
         var isFtps = item.Url.Scheme == "ftps";
         if (!string.IsNullOrEmpty(item.Url.UserInfo) &&
-            !item.Url.UserInfo.Equals("anonymous", StringComparison.OrdinalIgnoreCase) &&
-            !item.Url.UserInfo.StartsWith("anonymous:", StringComparison.OrdinalIgnoreCase))
+            !item.Url.UserInfo.Equals("anonymous", StringComparison.OrdinalIgnoreCase))
             throw new NotSupportedException(_chinese
                 ? "目前 FTP 仅支持匿名访问；为避免明文保存密码，暂不接受 URL 内嵌账号密码。"
                 : "FTP currently supports anonymous access only. Credentials in URLs are not accepted to avoid storing passwords in the queue.");
@@ -299,7 +298,7 @@ public partial class MainWindow : Window
             foreach (var entry in saved)
             {
                 if (!Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ||
-                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeFtp && uri.Scheme != "ftps") ||
                     string.IsNullOrWhiteSpace(entry.TargetPath))
                     continue;
 
