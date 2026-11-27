@@ -91,6 +91,10 @@ try {
         if (-not $amuled -or -not $api) { throw "The verified archive does not contain both amuled.exe and amuleapi.exe." }
     } else { Write-Step "Using the existing Downora aMule engine" }
 
+    if (Get-Process -Name "amuled", "amule" -ErrorAction SilentlyContinue) {
+        throw "Please exit the currently running aMule window or daemon, then run this setup again. Existing transfers will not be stopped automatically."
+    }
+
     Write-Step "Preparing a private local API connection"
     $random = [Security.Cryptography.RandomNumberGenerator]::Create()
     $ecBytes = New-Object byte[] 32
@@ -105,7 +109,11 @@ try {
     $md5Provider.Dispose()
     $configPath = Join-Path $configDir "amule.conf"
     $lines = [System.Collections.Generic.List[string]]::new()
-    if (Test-Path $configPath) { foreach ($line in [IO.File]::ReadAllLines($configPath)) { $lines.Add($line) } }
+    if (Test-Path $configPath) {
+        $backupPath = "$configPath.downora-backup"
+        if (-not (Test-Path $backupPath)) { Copy-Item -LiteralPath $configPath -Destination $backupPath }
+        foreach ($line in [IO.File]::ReadAllLines($configPath)) { $lines.Add($line) }
+    }
     Set-IniValue $lines "ExternalConnect" "AcceptExternalConnections" "1"
     Set-IniValue $lines "ExternalConnect" "ECAddress" "127.0.0.1"
     Set-IniValue $lines "ExternalConnect" "ECPort" "4712"
