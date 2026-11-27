@@ -29,9 +29,11 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
         string? infoHash = null;
         foreach (var topic in exactTopics)
         {
-            const string prefix = "urn:btih:";
-            if (!topic.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-            var candidate = topic[prefix.Length..].Trim();
+            const string prefix = "urn:btih";
+            if (!topic.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                topic.Length <= prefix.Length ||
+                topic[prefix.Length] is not (':' or '=')) continue;
+            var candidate = topic[(prefix.Length + 1)..].Trim();
             if (TryNormalizeInfoHash(candidate, out infoHash)) break;
         }
 
