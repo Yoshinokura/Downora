@@ -178,7 +178,10 @@ public partial class MainWindow : Window
             item.IsPaused = false;
             item.Token.Cancel();
             TryDelete(item.TargetPath + ".part");
-            item.Status = _chinese ? "正在取消…" : "Cancelling…";
+            if (item.IsPaused)
+                item.Status = _chinese ? "已取消" : "Cancelled";
+            else
+                item.Status = _chinese ? "正在取消…" : "Cancelling…";
         }
     }
 
