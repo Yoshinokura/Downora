@@ -3,7 +3,13 @@ param()
 $ErrorActionPreference = "Stop"
 $version = "3.2.0"
 $archiveName = "aMule-$version-Windows-x64.zip"
-$downloadUrl = "https://downloads.sourceforge.net/project/amule/$version/$archiveName"
+# Try geographically routed SourceForge mirrors first, then the official GitHub release.
+# All sources serve the same upstream artifact and are checked against one pinned SHA-256.
+$downloadUrls = @(
+    "https://downloads.sourceforge.net/project/amule/$version/$archiveName",
+    "https://sourceforge.net/projects/amule/files/$version/$archiveName/download",
+    "https://github.com/amule-org/amule/releases/download/$version/$archiveName"
+)
 $expectedSha256 = "6826FB9C3A63394C5BA111647AB397025CC8E44034772263AAB18BAE50F4AB32"
 
 function Write-Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
@@ -89,9 +95,33 @@ try {
         $stagingDir = Join-Path $tempDir "staging"
         New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
         Write-Step "Downloading the official aMule $version portable package"
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
-        $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
-        if ($actualHash -ne $expectedSha256) { throw "aMule package SHA-256 mismatch. The downloaded file was rejected." }
+        $downloaded = $false
+        $downloadErrors = [System.Collections.Generic.List[string]]::new()
+        foreach ($downloadUrl in $downloadUrls) {
+            try {
+                if (Test-Path $archivePath) { Remove-Item -LiteralPath $archivePath -Force }
+                Write-Host "Trying official source: $downloadUrl"
+                Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
+                if (-not (Test-Path $archivePath) -or (Get-Item -LiteralPath $archivePath).Length -lt 1MB) {
+                    throw "The source returned an empty or incomplete package."
+                }
+                $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
+                if ($actualHash -ne $expectedSha256) {
+                    Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
+                    throw "SHA-256 mismatch; this source was rejected."
+                }
+                $downloaded = $true
+                Write-Host "Download and SHA-256 verification succeeded." -ForegroundColor Green
+                break
+            } catch {
+                $downloadErrors.Add(("{0}: {1}" -f $downloadUrl, $_.Exception.Message))
+                Write-Warning "This source failed; trying the next official source."
+                if (Test-Path $archivePath) { Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue }
+            }
+        }
+        if (-not $downloaded) {
+            throw ("All official download sources failed. Check your network and retry.`n" + ($downloadErrors -join "`n"))
+        }
         Write-Step "Verifying and extracting aMule"
         Expand-Archive -Path $archivePath -DestinationPath $stagingDir -Force
         $stagedDaemon = Get-ChildItem -Path $stagingDir -Filter "amuled.exe" -Recurse | Select-Object -First 1
