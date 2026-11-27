@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links and submit them to a separately installed local aMule 3.1+ engine through its REST API; transfer progress synchronization is not yet implemented. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links and submit them to a separately installed local aMule 3.2.0+ engine through its REST API; transfer progress synchronization is not yet implemented. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are not yet implemented.
 
 ## Features
 
@@ -13,7 +13,7 @@
 - Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
 - FTP and explicit FTPS (AUTH TLS, port 21 by default) downloads with username/password stored in Windows Credential Manager; pause/resume where the server supports REST; implicit FTPS (port 990) is not supported
-- eD2k file-link parsing and validation, with submission to a local aMule 3.1+ REST API; aMule performs the network transfer, while Downora progress synchronization is not yet available
+- eD2k file-link parsing and validation, with submission to a local aMule 3.2.0+ REST API; aMule performs the network transfer, while Downora progress synchronization is not yet available
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification and automatic SHA-256 checksum display
@@ -63,7 +63,7 @@ On Windows x64, click **Set up eD2k** in Downora. The bundled PowerShell helper 
 
 If aMule is already running, close it before setup so active transfers are not interrupted. Existing `amule.conf` settings are backed up once as `amule.conf.downora-backup`. The helper does not require administrator rights. The engine is downloaded on demand and is not bundled with Downora.
 
-aMule remains a separate GPL-2.0 application. Downora does not link its code; the setup helper retrieves the official portable distribution and verifies the published package hash. The helper targets Windows x64 and pins aMule 3.2.0, including its verified SHA-256. The first existing `amule.conf` is backed up as `amule.conf.downora-backup`; setup asks you to close a running aMule process rather than interrupting active transfers.
+aMule remains a separate GPL-2.0 application. Downora does not link its code; the setup helper retrieves the official portable distribution and verifies the published package hash. The helper targets Windows x64 and pins aMule 3.2.0, with its published SHA-256 checked before extraction. Setup backs up an existing `amule.conf` once and asks you to close a running aMule process rather than interrupting active transfers.
 
 ## Legal & safety
 
