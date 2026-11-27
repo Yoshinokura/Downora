@@ -32,6 +32,17 @@ public sealed class MagnetLinkTests
     }
 
     [Fact]
+    public void ParsesBase32InfoHashWithEqualsSeparator()
+    {
+        var parsed = MagnetLink.TryParse(
+            "magnet:?xt=urn:btih=AERUKZ4JVPG66AJDIVTYTK6N54ASGRLH",
+            out var magnet, out var error);
+
+        Assert.True(parsed, error);
+        Assert.Equal(HexHash, magnet!.InfoHash);
+    }
+
+    [Fact]
     public void KeepsValidTrackersAndIgnoresInvalidOnes()
     {
         var parsed = MagnetLink.TryParse(
