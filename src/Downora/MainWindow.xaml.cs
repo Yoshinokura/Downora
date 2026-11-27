@@ -38,7 +38,7 @@ public partial class MainWindow : Window
     private void EnsureEd2kEngineRunning()
     {
         var engineRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "Engine", "aMule");
-        if (!Directory.Exists(engineRoot) || Process.GetProcessesByName("amuled").Length > 0) return;
+        if (!Directory.Exists(engineRoot) || Process.GetProcessesByName("amuled").Length > 0 || Process.GetProcessesByName("amule").Length > 0) return;
 
         var daemon = Directory.GetFiles(engineRoot, "amuled.exe", SearchOption.AllDirectories).FirstOrDefault();
         if (daemon is null) return;
