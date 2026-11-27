@@ -75,8 +75,8 @@
                         <TextBlock Text="{Binding SpeedText}" FontSize="11" Foreground="#80868B" HorizontalAlignment="Right" Margin="0,4,0,0"/>
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="{Binding ActionText}" Tag="{Binding}" Click="Ed2kPauseButton_Click"/>
-                        <Button Content="Cancel" Tag="{Binding}" Click="Ed2kCancelButton_Click"/>
+                        <Button Content="{Binding ActionText}" Tag="{Binding}" IsEnabled="{Binding CanControl}" Click="Ed2kPauseButton_Click"/>
+                        <Button Content="Cancel" Tag="{Binding}" IsEnabled="{Binding CanControl}" Click="Ed2kCancelButton_Click"/>
                       </StackPanel>
                     </Grid>
                   </Border>
