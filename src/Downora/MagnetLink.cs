@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Downora;
 
 public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyList<Uri> Trackers)
@@ -82,24 +84,19 @@ public sealed record MagnetLink(string InfoHash, string? DisplayName, IReadOnlyL
         }
 
         if (value.Length != 32) return false;
-        var bytes = new byte[20];
-        uint buffer = 0;
-        var bits = 0;
-        var output = 0;
+        var bitStream = new StringBuilder(160);
         foreach (var character in value.ToUpperInvariant())
         {
             var index = Base32Alphabet.IndexOf(character);
             if (index < 0) return false;
-            buffer = (buffer << 5) | (uint)index;
-            bits += 5;
-            if (bits < 8) continue;
-            bits -= 8;
-            if (output >= bytes.Length) return false;
-            bytes[output++] = (byte)((buffer >> bits) & 0xff);
-            buffer &= (uint)((1 << bits) - 1);
+            bitStream.Append(Convert.ToString(index, 2).PadLeft(5, '0'));
         }
 
-        if (output != 20 || bits != 0) return false;
+        if (bitStream.Length != 160) return false;
+        var bytes = new byte[20];
+        for (var i = 0; i < bytes.Length; i++)
+            bytes[i] = Convert.ToByte(bitStream.ToString(i * 8, 8), 2);
+
         normalized = Convert.ToHexString(bytes).ToLowerInvariant();
         return true;
     }
