@@ -18,7 +18,7 @@
     <Border Grid.Row="1" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="16" Margin="0,0,0,18">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste an HTTP or HTTPS link" KeyDown="UrlBox_KeyDown"/>
+        <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste an HTTP, HTTPS, FTP or FTPS link" KeyDown="UrlBox_KeyDown"/>
         <Button Grid.Column="1" Content="＋  Add download" Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="22,10" Click="AddButton_Click"/>
       </Grid>
     </Border>
