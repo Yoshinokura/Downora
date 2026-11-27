@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
@@ -143,6 +144,7 @@ public partial class MainWindow : Window
             await output.FlushAsync(token);
             if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
             File.Move(partPath, item.TargetPath);
+            await UpdateChecksumAsync(item, token);
             item.Progress = 100;
             item.IsPaused = false;
             item.IsCancelled = false;
@@ -282,6 +284,7 @@ public partial class MainWindow : Window
             foreach (var path in segmentPaths) TryDelete(path);
             if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
             File.Move(partPath, item.TargetPath);
+            await UpdateChecksumAsync(item, token);
             item.Progress = 100;
             item.ProgressText = FormatSize(total);
             item.SpeedText = "";
@@ -430,6 +433,7 @@ public partial class MainWindow : Window
             await output.FlushAsync(token);
             if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
             File.Move(partPath, item.TargetPath);
+            await UpdateChecksumAsync(item, token);
             item.Progress = 100;
             item.IsPaused = false;
             item.IsCancelled = false;
@@ -443,6 +447,14 @@ public partial class MainWindow : Window
         {
             throw new OperationCanceledException(token);
         }
+    }
+
+    private static async Task UpdateChecksumAsync(DownloadItem item, CancellationToken token)
+    {
+        await using var stream = new FileStream(item.TargetPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var hash = await SHA256.HashDataAsync(stream, token);
+        item.ChecksumText = "SHA-256: " + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private void PauseButton_Click(object sender, RoutedEventArgs e)
@@ -642,11 +654,13 @@ public sealed class DownloadItem : INotifyPropertyChanged
     private double _progress;
     private string _progressText = "0%";
     private string _speedText = "";
+    private string _checksumText = "";
     private string _actionText = "Pause";
     public string Status { get => _status; set { _status = value; OnChanged(); ActionText = IsPaused && (value.StartsWith("Paused", StringComparison.Ordinal) || value.StartsWith("已暂停", StringComparison.Ordinal)) ? (_chinese ? "继续" : "Resume") : (_chinese ? "暂停" : "Pause"); } }
     public double Progress { get => _progress; set { _progress = value; ProgressText = $"{value:0}%"; OnChanged(); } }
     public string ProgressText { get => _progressText; set { _progressText = value; OnChanged(); } }
     public string SpeedText { get => _speedText; set { _speedText = value; OnChanged(); } }
+    public string ChecksumText { get => _checksumText; set { _checksumText = value; OnChanged(); } }
     public string ActionText { get => _actionText; set { _actionText = value; OnChanged(); } }
     public event PropertyChangedEventHandler? PropertyChanged;
 
