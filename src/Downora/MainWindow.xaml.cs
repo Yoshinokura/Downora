@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -11,7 +13,8 @@ namespace Downora;
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<DownloadItem> _items = new();
-    private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
+    private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All });
+    private readonly SemaphoreSlim _slots = new(3, 3);
     private bool _chinese;
     private readonly string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
 
@@ -25,7 +28,6 @@ public partial class MainWindow : Window
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
     {
         _chinese = !_chinese;
-        AppTitle.Text = "Downora";
         Subtitle.Text = _chinese ? "更简单的下载方式" : "A simpler way to download";
         UrlBox.ToolTip = _chinese ? "粘贴 HTTP 或 HTTPS 下载链接" : "Paste an HTTP or HTTPS link";
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
@@ -55,42 +57,66 @@ public partial class MainWindow : Window
 
         var name = Path.GetFileName(uri.LocalPath);
         if (string.IsNullOrWhiteSpace(name)) name = "download-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        name = Sanitize(name);
+        name = Sanitize(Uri.UnescapeDataString(name));
         var folder = GetCategoryFolder(name);
         Directory.CreateDirectory(folder);
         var target = UniquePath(Path.Combine(folder, name));
         var item = new DownloadItem(uri, target, _chinese);
         _items.Insert(0, item);
-        QueueCount.Text = $"  ·  {_items.Count} {(_chinese ? "个任务" : "items")}";
+        UpdateQueueCount();
         UrlBox.Clear();
         _ = RunDownloadAsync(item);
     }
 
     private async Task RunDownloadAsync(DownloadItem item)
     {
-        item.Status = _chinese ? "正在连接…" : "Connecting…";
+        var token = item.Token.Token;
+        var partPath = item.TargetPath + ".part";
+        var enteredSlot = false;
         try
         {
-            using var response = await _http.GetAsync(item.Url, HttpCompletionOption.ResponseHeadersRead, item.Token.Token);
+            item.Status = _chinese ? "等待下载槽位" : "Queued";
+            await _slots.WaitAsync(token);
+            enteredSlot = true;
+
+            var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
+            using var request = new HttpRequestMessage(HttpMethod.Get, item.Url);
+            if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
+
+            item.Status = _chinese ? "正在连接…" : "Connecting…";
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
+
+            var append = offset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+            if (!append) offset = 0;
+            var total = response.Content.Headers.ContentRange?.Length
+                        ?? (response.Content.Headers.ContentLength is long length ? length + offset : null);
+
             item.Status = _chinese ? "正在下载" : "Downloading";
-            var total = response.Content.Headers.ContentLength;
-            await using var input = await response.Content.ReadAsStreamAsync(item.Token.Token);
-            await using var output = new FileStream(item.TargetPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
+            await using var input = await response.Content.ReadAsStreamAsync(token);
+            await using var output = new FileStream(partPath, append ? FileMode.Append : FileMode.Create,
+                FileAccess.Write, FileShare.None, 81920, true);
+
             var buffer = new byte[81920];
-            long received = 0;
+            long received = offset;
             var started = DateTime.UtcNow;
             int read;
-            while ((read = await input.ReadAsync(buffer, item.Token.Token)) > 0)
+            while ((read = await input.ReadAsync(buffer, token)) > 0)
             {
-                await output.WriteAsync(buffer.AsMemory(0, read), item.Token.Token);
+                await output.WriteAsync(buffer.AsMemory(0, read), token);
                 received += read;
                 item.Progress = total is > 0 ? Math.Min(100, received * 100d / total.Value) : 0;
                 var seconds = Math.Max(0.1, (DateTime.UtcNow - started).TotalSeconds);
-                item.SpeedText = FormatSize(received / seconds) + "/s";
+                item.SpeedText = FormatSize((received - offset) / seconds) + "/s";
                 item.ProgressText = total is > 0 ? $"{FormatSize(received)} / {FormatSize(total.Value)}" : FormatSize(received);
             }
+
+            await output.FlushAsync(token);
+            if (File.Exists(item.TargetPath)) File.Delete(item.TargetPath);
+            File.Move(partPath, item.TargetPath);
             item.Progress = 100;
+            item.IsPaused = false;
+            item.IsCancelled = false;
             item.Status = _chinese ? "已完成" : "Completed";
             item.SpeedText = "";
             FooterText.Text = _chinese ? "下载完成" : "Download complete";
@@ -98,28 +124,63 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            item.Status = _chinese ? "已取消" : "Cancelled";
-            TryDelete(item.TargetPath);
+            item.SpeedText = "";
+            if (item.IsCancelled)
+            {
+                item.Status = _chinese ? "已取消" : "Cancelled";
+                TryDelete(partPath);
+            }
+            else
+            {
+                item.IsPaused = true;
+                item.Status = _chinese ? "已暂停（可继续）" : "Paused — ready to resume";
+            }
         }
         catch (Exception ex)
         {
             item.Status = (_chinese ? "失败：" : "Failed: ") + ex.Message;
-            TryDelete(item.TargetPath);
+            item.SpeedText = "";
+        }
+        finally
+        {
+            if (enteredSlot) _slots.Release();
+            UpdateQueueCount();
         }
     }
 
     private void PauseButton_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is DownloadItem item)
+        if ((sender as FrameworkElement)?.Tag is not DownloadItem item) return;
+        if (item.Status == "Completed" || item.Status == "已完成" || item.IsCancelled) return;
+
+        if (item.IsPaused)
         {
-            item.Status = _chinese ? "暂停（原型中请取消后重试）" : "Pause is not available in this prototype";
+            item.IsPaused = false;
+            item.IsCancelled = false;
+            item.ResetToken();
+            _ = RunDownloadAsync(item);
+        }
+        else
+        {
+            item.IsPaused = true;
+            item.Token.Cancel();
         }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is DownloadItem item) item.Token.Cancel();
+        if ((sender as FrameworkElement)?.Tag is DownloadItem item)
+        {
+            item.IsCancelled = true;
+            item.IsPaused = false;
+            item.Token.Cancel();
+            TryDelete(item.TargetPath + ".part");
+            item.Status = _chinese ? "正在取消…" : "Cancelling…";
+        }
     }
+
+    private void UpdateQueueCount() =>
+        QueueCount.Text = $"  ·  {_items.Count} {(_chinese ? "个任务" : "items")}";
 
     private string GetCategoryFolder(string name)
     {
@@ -137,7 +198,7 @@ public partial class MainWindow : Window
     private static string Sanitize(string name)
     {
         foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
-        return name.Trim();
+        return string.IsNullOrWhiteSpace(name) ? "download" : name.Trim();
     }
 
     private static string UniquePath(string path)
@@ -147,11 +208,13 @@ public partial class MainWindow : Window
         var ext = Path.GetExtension(path);
         var candidate = path;
         var i = 1;
-        while (File.Exists(candidate)) candidate = Path.Combine(dir, $"{name} ({i++}){ext}");
+        while (File.Exists(candidate) || File.Exists(candidate + ".part"))
+            candidate = Path.Combine(dir, $"{name} ({i++}){ext}");
         return candidate;
     }
 
     private static void TryDelete(string path) { try { if (File.Exists(path)) File.Delete(path); } catch { } }
+
     private static string FormatSize(double bytes)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB"];
@@ -165,18 +228,45 @@ public sealed class DownloadItem : INotifyPropertyChanged
 {
     public Uri Url { get; }
     public string TargetPath { get; }
-    public CancellationTokenSource Token { get; } = new();
+    public CancellationTokenSource Token { get; private set; } = new();
     public string FileName => Path.GetFileName(TargetPath);
+    public bool IsPaused { get; set; }
+    public bool IsCancelled { get; set; }
     private string _status;
     private double _progress;
     private string _progressText = "0%";
     private string _speedText = "";
+    private string _actionText = "Pause";
     public string Status { get => _status; set { _status = value; OnChanged(); } }
     public double Progress { get => _progress; set { _progress = value; ProgressText = $"{value:0}%"; OnChanged(); } }
     public string ProgressText { get => _progressText; set { _progressText = value; OnChanged(); } }
     public string SpeedText { get => _speedText; set { _speedText = value; OnChanged(); } }
+    public string ActionText { get => _actionText; set { _actionText = value; OnChanged(); } }
     public event PropertyChangedEventHandler? PropertyChanged;
-    public DownloadItem(Uri url, string path, bool chinese) { Url = url; TargetPath = path; _status = chinese ? "等待中" : "Queued"; }
-    public void RefreshLanguage(bool chinese) { if (Status == "Queued" || Status == "等待中") Status = chinese ? "等待中" : "Queued"; }
-    private void OnChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    public DownloadItem(Uri url, string path, bool chinese)
+    {
+        Url = url;
+        TargetPath = path;
+        _status = chinese ? "等待中" : "Queued";
+        RefreshLanguage(chinese);
+    }
+
+    public void ResetToken()
+    {
+        Token.Dispose();
+        Token = new CancellationTokenSource();
+    }
+
+    public void RefreshLanguage(bool chinese)
+    {
+        ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
+        if (Status == "Queued" || Status == "等待中")
+            Status = chinese ? "等待中" : "Queued";
+        else if (Status.StartsWith("Paused", StringComparison.Ordinal) || Status.StartsWith("已暂停", StringComparison.Ordinal))
+            Status = chinese ? "已暂停（可继续）" : "Paused — ready to resume";
+    }
+
+    private void OnChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
