@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 
@@ -16,6 +17,9 @@ public partial class MainWindow : Window
     // Keep response bytes untouched: transparent decompression can invalidate byte offsets used by Range resume.
     private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None });
     private readonly SemaphoreSlim _slots = new(3, 3);
+    private readonly List<Task> _downloadTasks = new();
+    private readonly string _queueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "downloads.json");
+    private bool _allowClose;
     private bool _chinese;
     private readonly string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
 
@@ -24,6 +28,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DownloadsList.ItemsSource = _items;
         Directory.CreateDirectory(_root);
+        LoadQueue();
     }
 
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
@@ -66,10 +71,11 @@ public partial class MainWindow : Window
         _items.Insert(0, item);
         UpdateQueueCount();
         UrlBox.Clear();
-        _ = RunDownloadAsync(item);
+        SaveQueue();
+        StartDownload(item);
     }
 
-    private async Task RunDownloadAsync(DownloadItem item)
+    private void StartDownload(DownloadItem item)\n    {\n        _downloadTasks.Add(RunDownloadAsync(item));\n    }\n\n    private async Task RunDownloadAsync(DownloadItem item)
     {
         var token = item.Token.Token;
         var partPath = item.TargetPath + ".part";
@@ -149,6 +155,7 @@ public partial class MainWindow : Window
         {
             if (enteredSlot) _slots.Release();
             UpdateQueueCount();
+            SaveQueue();
         }
     }
 
@@ -165,7 +172,7 @@ public partial class MainWindow : Window
             item.IsCancelled = false;
             item.ResetToken();
             item.Status = _chinese ? "等待继续…" : "Resuming…";
-            _ = RunDownloadAsync(item);
+            StartDownload(item);
         }
         else
         {
@@ -190,6 +197,7 @@ public partial class MainWindow : Window
             {
                 TryDelete(item.TargetPath + ".part");
                 item.Status = _chinese ? "已取消" : "Cancelled";
+                SaveQueue();
             }
             else
             {
@@ -198,6 +206,96 @@ public partial class MainWindow : Window
             }
         }
     }
+
+
+    private void LoadQueue()
+    {
+        try
+        {
+            if (!File.Exists(_queueFile)) return;
+            var saved = JsonSerializer.Deserialize<List<SavedDownload>>(File.ReadAllText(_queueFile)) ?? new();
+            foreach (var entry in saved)
+            {
+                if (!Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+                    string.IsNullOrWhiteSpace(entry.TargetPath))
+                    continue;
+
+                var item = new DownloadItem(uri, entry.TargetPath, _chinese)
+                {
+                    IsCompleted = entry.IsCompleted || File.Exists(entry.TargetPath),
+                    IsCancelled = entry.IsCancelled,
+                    IsPaused = !entry.IsCompleted && !entry.IsCancelled
+                };
+
+                if (item.IsCompleted)
+                {
+                    item.IsPaused = false;
+                    item.Progress = 100;
+                    item.Status = _chinese ? "已完成" : "Completed";
+                }
+                else if (item.IsCancelled)
+                {
+                    item.IsPaused = false;
+                    item.Status = _chinese ? "已取消" : "Cancelled";
+                }
+                else
+                {
+                    item.Status = _chinese ? "已暂停（可继续）" : "Paused — ready to resume";
+                    var part = item.TargetPath + ".part";
+                    if (File.Exists(part))
+                        item.ProgressText = FormatSize(new FileInfo(part).Length);
+                }
+
+                _items.Add(item);
+            }
+            UpdateQueueCount();
+        }
+        catch
+        {
+            // A damaged queue file must not prevent the application from starting.
+        }
+    }
+
+    private void SaveQueue()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_queueFile)!;
+            Directory.CreateDirectory(directory);
+            var entries = _items.Select(item => new SavedDownload(
+                item.Url.AbsoluteUri, item.TargetPath, item.IsCompleted, item.IsCancelled)).ToList();
+            var temporary = _queueFile + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temporary, _queueFile, true);
+        }
+        catch
+        {
+            // Queue persistence is best-effort; downloads should continue if the profile is read-only.
+        }
+    }
+
+    private async void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_allowClose) return;
+        e.Cancel = true;
+
+        foreach (var item in _items)
+        {
+            if (!item.IsCompleted && !item.IsCancelled)
+            {
+                item.IsPaused = true;
+                item.Token.Cancel();
+            }
+        }
+
+        try { await Task.WhenAll(_downloadTasks.ToArray()); } catch { }
+        SaveQueue();
+        _allowClose = true;
+        Close();
+    }
+
+    private sealed record SavedDownload(string Url, string TargetPath, bool IsCompleted, bool IsCancelled);
 
     private void UpdateQueueCount() =>
         QueueCount.Text = $"  ·  {_items.Count} {(_chinese ? "个任务" : "items")}";
