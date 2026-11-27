@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, but the eD2k network transfer engine is not yet integrated. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, eD2k, M3U8, browser integration and advanced scheduling are not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, but the eD2k network transfer engine is not yet integrated. HTTP Range and FTP REST resume are attempted when supported by the server. BitTorrent/Magnet, eD2k transfers, M3U8, browser integration and advanced scheduling are not yet implemented.
 
 ## Features
 
