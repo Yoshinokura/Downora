@@ -1,3 +1,4 @@
+using System.IO;
 using MonoTorrent;
 using MonoTorrent.Client;
 
@@ -118,21 +119,28 @@ public sealed class BitTorrentEngine : IAsyncDisposable
     {
         ThrowIfDisposed();
         var manager = _engine.Torrents.FirstOrDefault(x =>
-            x.InfoHash.ToString().Equals(infoHash, StringComparison.OrdinalIgnoreCase));
+            GetInfoHash(x).Equals(infoHash, StringComparison.OrdinalIgnoreCase));
         return manager ?? throw new KeyNotFoundException("The BitTorrent task could not be found.");
     }
 
-    private static BitTorrentTaskSnapshot CreateSnapshot(TorrentManager manager) =>
-        new(
-            manager.InfoHash.ToString(),
-            string.IsNullOrWhiteSpace(manager.Name) ? manager.InfoHash.ToString() : manager.Name,
+    private static string GetInfoHash(TorrentManager manager) =>
+        manager.Torrent?.InfoHash.ToString() ?? manager.MagnetLink.InfoHash.ToString();
+
+    private static BitTorrentTaskSnapshot CreateSnapshot(TorrentManager manager)
+    {
+        var infoHash = GetInfoHash(manager);
+        var size = manager.Torrent?.Size ?? manager.MagnetLink.Size ?? 0;
+        return new BitTorrentTaskSnapshot(
+            infoHash,
+            string.IsNullOrWhiteSpace(manager.Name) ? infoHash : manager.Name,
             manager.Progress,
-            manager.Size,
+            size,
             manager.Monitor.DownloadSpeed,
             manager.Monitor.UploadSpeed,
             manager.OpenConnections,
             manager.State.ToString(),
             manager.Complete);
+    }
 
     private void ThrowIfDisposed()
     {
