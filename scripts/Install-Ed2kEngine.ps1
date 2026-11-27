@@ -1,10 +1,10 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = "Stop"
-$version = "3.1.0"
+$version = "3.2.0"
 $archiveName = "aMule-$version-Windows-x64.zip"
 $downloadUrl = "https://downloads.sourceforge.net/project/amule/$version/$archiveName"
-$expectedSha256 = "81D3A024207C272524E4D992BFAF352A86256B00AFAC414F0405CE465642CFB7"
+$expectedSha256 = "6826FB9C3A63394C5BA111647AB397025CC8E44034772263AAB18BAE50F4AB32"
 
 function Write-Step([string]$Message) { Write-Host ""; Write-Host "==> $Message" -ForegroundColor Cyan }
 
