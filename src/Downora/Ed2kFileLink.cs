@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace Downora;
 
 public sealed record Ed2kFileLink(string FileName, long Size, string Hash)
