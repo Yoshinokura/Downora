@@ -16,6 +16,7 @@
 - Local JSON queue persistence; unfinished tasks are restored as paused when the app starts and can be resumed
 - Automatic category folders (Videos, Documents, Archives, Other)
 - Completion notification
+- Automatic SHA-256 checksum calculation and display after successful downloads
 - Rejects credential-bearing URLs so passwords are not written into the persistent download queue
 - Safe filename handling and collision avoidance
 
@@ -46,7 +47,8 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [ ] eD2k adapter (compatible, legally distributable engine)
 - [ ] M3U8 download and remux workflow
 - [ ] Browser handoff / extension
-- [ ] Clipboard monitoring, scheduler, checksum verification
+- [x] SHA-256 checksum calculation after completed downloads
+- [ ] Clipboard monitoring, scheduler, comparison against publisher-provided checksums
 - [ ] Installer and signed Windows release
 
 ## Legal & safety
