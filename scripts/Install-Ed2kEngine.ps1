@@ -86,18 +86,22 @@ try {
     $amuled = Get-ChildItem -Path $baseDir -Filter "amuled.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     $api = Get-ChildItem -Path $baseDir -Filter "amuleapi.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $amuled -or -not $api -or $installedVersion -ne $version) {
-        if (Test-Path $baseDir) {
-            Get-ChildItem -LiteralPath $baseDir -Force | Remove-Item -Recurse -Force
-        }
+        $stagingDir = Join-Path $tempDir "staging"
+        New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
         Write-Step "Downloading the official aMule $version portable package"
         Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
         $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
         if ($actualHash -ne $expectedSha256) { throw "aMule package SHA-256 mismatch. The downloaded file was rejected." }
         Write-Step "Verifying and extracting aMule"
-        Expand-Archive -Path $archivePath -DestinationPath $baseDir -Force
+        Expand-Archive -Path $archivePath -DestinationPath $stagingDir -Force
+        $stagedDaemon = Get-ChildItem -Path $stagingDir -Filter "amuled.exe" -Recurse | Select-Object -First 1
+        $stagedApi = Get-ChildItem -Path $stagingDir -Filter "amuleapi.exe" -Recurse | Select-Object -First 1
+        if (-not $stagedDaemon -or -not $stagedApi) { throw "The verified archive does not contain both amuled.exe and amuleapi.exe." }
+
+        Get-ChildItem -LiteralPath $baseDir -Force | Remove-Item -Recurse -Force
+        Get-ChildItem -LiteralPath $stagingDir -Force | Move-Item -Destination $baseDir
         $amuled = Get-ChildItem -Path $baseDir -Filter "amuled.exe" -Recurse | Select-Object -First 1
         $api = Get-ChildItem -Path $baseDir -Filter "amuleapi.exe" -Recurse | Select-Object -First 1
-        if (-not $amuled -or -not $api) { throw "The verified archive does not contain both amuled.exe and amuleapi.exe." }
         Set-Content -LiteralPath $versionMarker -Value $version -NoNewline
     } else { Write-Step "Using the existing Downora aMule $version engine" }
 
