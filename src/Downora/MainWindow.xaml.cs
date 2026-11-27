@@ -98,11 +98,8 @@ public partial class MainWindow : Window
             }
 
             var offset = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
-            using var request = new HttpRequestMessage(HttpMethod.Get, item.Url);
-            if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
-
             item.Status = _chinese ? "正在连接…" : "Connecting…";
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            using var response = await SendHttpWithRetryAsync(item.Url, offset, item, token);
             response.EnsureSuccessStatusCode();
 
             var append = offset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
@@ -170,6 +167,39 @@ public partial class MainWindow : Window
         }
     }
 
+
+
+    private async Task<HttpResponseMessage> SendHttpWithRetryAsync(
+        Uri url, long offset, DownloadItem item, CancellationToken token)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (offset > 0) request.Headers.Range = new RangeHeaderValue(offset, null);
+
+            try
+            {
+                var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+                var transient = response.StatusCode == HttpStatusCode.RequestTimeout ||
+                                (int)response.StatusCode == 429 ||
+                                (int)response.StatusCode >= 500;
+                if (!transient || attempt >= maxAttempts)
+                    return response;
+
+                response.Dispose();
+            }
+            catch (HttpRequestException) when (attempt < maxAttempts && !token.IsCancellationRequested)
+            {
+                // Retry transient connection failures with a bounded exponential delay.
+            }
+
+            item.Status = _chinese
+                ? $"连接暂时失败，正在重试（{attempt}/{maxAttempts - 1}）…"
+                : $"Temporary connection failure, retrying ({attempt}/{maxAttempts - 1})…";
+            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), token);
+        }
+    }
 
     private async Task DownloadFtpAsync(DownloadItem item, string partPath, CancellationToken token)
     {
