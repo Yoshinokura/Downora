@@ -44,14 +44,32 @@ public partial class MainWindow : Window
         var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
         _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
         _bitTorrentRefreshTimer.Tick += async (_, _) => await RefreshBitTorrentQueueAsync();
-        _bitTorrentRefreshTimer.Start();
         _ed2kRefreshTimer.Tick += async (_, _) => await RefreshEd2kQueueAsync();
         _ed2kRefreshTimer.Start();
         Directory.CreateDirectory(_root);
         LoadQueue();
         EnsureEd2kEngineRunning();
         _ = RefreshEd2kQueueAsync();
-        _ = RefreshBitTorrentQueueAsync();
+        _ = InitializeBitTorrentAsync();
+    }
+
+    private async Task InitializeBitTorrentAsync()
+    {
+        var stateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "BitTorrentState.json");
+        try
+        {
+            var restored = await _bitTorrentEngine.RestoreStateAsync(stateFile);
+            if (restored)
+                FooterText.Text = _chinese ? "已恢复 BitTorrent 下载任务" : "BitTorrent tasks restored";
+        }
+        catch (Exception ex)
+        {
+            FooterText.Text = (_chinese ? "恢复 BitTorrent 任务失败：" : "Could not restore BitTorrent tasks: ") + ex.Message;
+        }
+
+        if (_allowClose) return;
+        _bitTorrentRefreshTimer.Start();
+        await RefreshBitTorrentQueueAsync();
     }
 
     private async Task RefreshBitTorrentQueueAsync()
