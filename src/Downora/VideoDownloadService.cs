@@ -206,7 +206,7 @@ public sealed class VideoDownloadService : IDisposable
         _ => "all,-live_chat"
     };
 
-    public static string FormatDownloadError(string? message)
+    public static string FormatDownloadError(string? message, bool chinese = false)
     {
         var detail = message?.Trim() ?? "";
         if (detail.Contains("sign in", StringComparison.OrdinalIgnoreCase) ||
@@ -215,13 +215,19 @@ public sealed class VideoDownloadService : IDisposable
             detail.Contains("members-only", StringComparison.OrdinalIgnoreCase) ||
             detail.Contains("private video", StringComparison.OrdinalIgnoreCase) ||
             detail.Contains("authentication required", StringComparison.OrdinalIgnoreCase))
-            return "This video requires account access or membership. Downora downloads public videos without login and does not bypass access restrictions.";
+            return chinese
+                ? "该视频需要账号登录或会员权限。Downora 默认免登录下载公开视频，不会绕过平台访问限制。"
+                : "This video requires account access or membership. Downora downloads public videos without login and does not bypass access restrictions.";
 
         if (detail.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase) ||
             detail.Contains("forbidden", StringComparison.OrdinalIgnoreCase))
-            return "The platform denied this request. The video may be restricted or temporarily unavailable; Downora does not bypass platform access controls.";
+            return chinese
+                ? "平台拒绝了此次请求。视频可能受到限制或暂时不可用；Downora 不会绕过平台访问控制。"
+                : "The platform denied this request. The video may be restricted or temporarily unavailable; Downora does not bypass platform access controls.";
 
-        return string.IsNullOrWhiteSpace(detail) ? "The video download failed." : detail;
+        return string.IsNullOrWhiteSpace(detail)
+            ? (chinese ? "视频下载失败。" : "The video download failed.")
+            : detail;
     }
 
     private List<string> BuildRuntimeArguments(Uri videoUrl)
