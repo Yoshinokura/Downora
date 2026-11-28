@@ -10,6 +10,9 @@
 #ifndef OutputBaseName
   #define OutputBaseName "Downora-Setup"
 #endif
+#ifndef MinWindowsVersion
+  #define MinWindowsVersion "10.0.14393"
+#endif
 
 [Setup]
 AppId={{A2C5A2D4-6D31-4A4E-A3D7-7E0D9F2C41B8}
