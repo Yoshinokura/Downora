@@ -465,8 +465,7 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(safeTitle)) safeTitle = "video-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
             var folder = Path.Combine(_root, "Videos");
             Directory.CreateDirectory(folder);
-            var reservedPath = UniquePath(Path.Combine(folder, safeTitle + ".mp4"));
-            var outputBase = Path.Combine(folder, Path.GetFileNameWithoutExtension(reservedPath));
+            var outputBase = GetUniqueVideoBasePath(folder, safeTitle);
             var item = new VideoDownloadItem(info, _chinese);
             _videoItems.Insert(0, item);
             VideoTab.IsSelected = true;
@@ -1131,6 +1130,15 @@ public partial class MainWindow : Window
     {
         foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
         return string.IsNullOrWhiteSpace(name) ? "download" : name.Trim();
+    }
+
+    private static string GetUniqueVideoBasePath(string folder, string title)
+    {
+        var candidate = title;
+        var index = 1;
+        while (Directory.EnumerateFiles(folder, candidate + ".*", SearchOption.TopDirectoryOnly).Any())
+            candidate = $"{title} ({index++})";
+        return Path.Combine(folder, candidate);
     }
 
     private static string UniquePath(string path)
