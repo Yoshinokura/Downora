@@ -1,3 +1,5 @@
+using System.IO;
+using Xunit;
 using Downora;
 
 namespace Downora.Tests;
