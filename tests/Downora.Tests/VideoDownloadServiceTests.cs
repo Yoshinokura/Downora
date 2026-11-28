@@ -50,7 +50,7 @@ public sealed class VideoDownloadServiceTests
     public void RestoredVideoTaskCanBeResumed(bool chinese, string expectedLabel)
     {
         var info = new VideoPlatformInfo("Sample video", "Uploader", 60, null, "YouTube", "abc123");
-        using var item = new VideoDownloadItem(info, new Uri("https://youtu.be/abc123"),
+        var item = new VideoDownloadItem(info, new Uri("https://youtu.be/abc123"),
             Path.Combine(Path.GetTempPath(), "Downora", "Videos", "Sample video"), 1080, chinese);
 
         item.RestorePaused(chinese);
@@ -64,6 +64,7 @@ public sealed class VideoDownloadServiceTests
         Assert.False(item.IsPaused);
         Assert.True(item.CanCancel);
         Assert.False(item.CanRetry);
+        item.Token.Dispose();
     }
 
     [Theory]
