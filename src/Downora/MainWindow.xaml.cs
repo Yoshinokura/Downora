@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _slots = new(3, 3);
     private readonly List<Task> _downloadTasks = new();
     private readonly string _queueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "downloads.json");
+    private readonly string _videoQueueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "video-downloads.json");
     private bool _allowClose;
     private bool _chinese;
     private readonly string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
         _ed2kRefreshTimer.Start();
         Directory.CreateDirectory(_root);
         LoadQueue();
+        LoadVideoQueue();
         EnsureEd2kEngineRunning();
         _ = RefreshEd2kQueueAsync();
         _ = InitializeBitTorrentAsync();
@@ -469,6 +471,7 @@ public partial class MainWindow : Window
             var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
             var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese);
             _videoItems.Insert(0, item);
+            SaveVideoQueue();
             VideoTab.IsSelected = true;
             _videoTasks.Add(RunVideoDownloadAsync(item, uri, outputBase, selectedHeight));
             FooterText.Text = _chinese ? "视频任务已加入队列" : "Video task added to queue";
@@ -486,22 +489,26 @@ public partial class MainWindow : Window
         try
         {
             item.SetStatus(_chinese ? "等待下载" : "Queued");
+            SaveVideoQueue();
             await _videoSlots.WaitAsync(item.Token.Token);
             enteredSlot = true;
             item.SetStatus(_chinese ? "正在下载" : "Downloading");
             var progress = new Progress<VideoDownloadProgress>(value => item.Update(value, _chinese));
             var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token, maxHeight);
             item.SetCompleted(outputPath, _chinese);
+            SaveVideoQueue();
             FooterText.Text = _chinese ? "视频下载完成" : "Video download complete";
             try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
         }
         catch (OperationCanceledException)
         {
             item.SetCancelled(_chinese);
+            SaveVideoQueue();
         }
         catch (Exception ex)
         {
             item.SetFailed(ex.Message, _chinese);
+            SaveVideoQueue();
         }
         finally
         {
@@ -519,6 +526,7 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is not VideoDownloadItem item || !item.CanRetry) return;
         item.PrepareRetry();
+        SaveVideoQueue();
         _videoTasks.Add(RunVideoDownloadAsync(item, item.SourceUri, item.OutputBasePath, item.MaxHeight));
     }
 
@@ -1071,6 +1079,74 @@ public partial class MainWindow : Window
         }
     }
 
+    private sealed record SavedVideoDownload(
+        string Url, string OutputBasePath, int? MaxHeight, VideoPlatformInfo Info,
+        string State, string? CompletedPath, string? Error);
+
+    private void LoadVideoQueue()
+    {
+        try
+        {
+            if (!File.Exists(_videoQueueFile)) return;
+            var saved = JsonSerializer.Deserialize<List<SavedVideoDownload>>(File.ReadAllText(_videoQueueFile)) ?? new();
+            var videoRoot = Path.GetFullPath(Path.Combine(_root, "Videos")) + Path.DirectorySeparatorChar;
+            foreach (var entry in saved)
+            {
+                if (!Uri.TryCreate(entry.Url, UriKind.Absolute, out var uri) ||
+                    !VideoDownloadService.IsSupportedPlatformUrl(uri) ||
+                    string.IsNullOrWhiteSpace(entry.OutputBasePath) || entry.Info is null)
+                    continue;
+
+                var outputBase = Path.GetFullPath(entry.OutputBasePath);
+                if (!outputBase.StartsWith(videoRoot, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var item = new VideoDownloadItem(entry.Info, uri, outputBase, entry.MaxHeight, _chinese);
+                if (entry.State == "Completed" && !string.IsNullOrWhiteSpace(entry.CompletedPath) &&
+                    File.Exists(entry.CompletedPath))
+                    item.SetCompleted(entry.CompletedPath, _chinese);
+                else if (entry.State == "Failed")
+                    item.SetFailed(entry.Error ?? "Previous attempt failed", _chinese);
+                else if (entry.State == "Cancelled")
+                    item.SetCancelled(_chinese);
+                else
+                    item.RestorePaused(_chinese);
+
+                _videoItems.Add(item);
+            }
+        }
+        catch
+        {
+            // A damaged video queue must not prevent the application from starting.
+        }
+    }
+
+    private void SaveVideoQueue()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_videoQueueFile)!;
+            Directory.CreateDirectory(directory);
+            var entries = _videoItems.Select(item => new SavedVideoDownload(
+                item.SourceUri.AbsoluteUri,
+                item.OutputBasePath,
+                item.MaxHeight,
+                item.Info,
+                item.IsCompleted ? "Completed" :
+                    item.IsFailed ? "Failed" :
+                    item.IsCancelled ? "Cancelled" :
+                    item.IsPaused ? "Paused" : "Active",
+                item.CompletedPath,
+                item.FailureMessage)).ToList();
+            var temporary = _videoQueueFile + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temporary, _videoQueueFile, true);
+        }
+        catch
+        {
+            // Queue persistence is best-effort; downloads should continue if the profile is read-only.
+        }
+    }
+
     private void SaveQueue()
     {
         try
@@ -1112,6 +1188,7 @@ public partial class MainWindow : Window
         try { await _bitTorrentEngine.DisposeAsync(); } catch { }
         _videoService.Dispose();
         SaveQueue();
+        SaveVideoQueue();
         _allowClose = true;
         Close();
     }
@@ -1190,9 +1267,12 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public bool IsCompleted { get; private set; }
     public bool IsCancelled { get; private set; }
     public bool IsFailed { get; private set; }
-    public bool CanCancel => !IsCompleted && !IsCancelled && !IsFailed && !Token.IsCancellationRequested;
-    public bool CanRetry => IsCancelled || IsFailed;
-    public string RetryText => _chinese ? "重试" : "Retry";
+    public bool IsPaused { get; private set; }
+    public string? CompletedPath { get; private set; }
+    public string? FailureMessage { get; private set; }
+    public bool CanCancel => !IsCompleted && !IsCancelled && !IsFailed && !IsPaused && !Token.IsCancellationRequested;
+    public bool CanRetry => IsCancelled || IsFailed || IsPaused;
+    public string RetryText => _chinese ? (IsPaused ? "继续" : "重试") : (IsPaused ? "Resume" : "Retry");
     public string CancelText => _chinese ? "取消" : "Cancel";
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -1217,6 +1297,8 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
         Token = new CancellationTokenSource();
         IsCancelled = false;
         IsFailed = false;
+        IsPaused = false;
+        FailureMessage = null;
         Progress = 0;
         ProgressText = "0%";
         SpeedText = "";
@@ -1247,12 +1329,18 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
         EtaText = "";
         Status = (chinese ? "已完成 · " : "Completed · ") + Path.GetFileName(path);
         IsCompleted = true;
+        IsCancelled = false;
+        IsFailed = false;
+        IsPaused = false;
+        CompletedPath = path;
+        FailureMessage = null;
         NotifyAll();
     }
 
     public void SetCancelled(bool chinese)
     {
         IsCancelled = true;
+        IsPaused = false;
         Status = chinese ? "已取消（临时文件保留）" : "Cancelled (partial file kept)";
         SpeedText = "";
         EtaText = "";
@@ -1262,9 +1350,20 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public void SetFailed(string error, bool chinese)
     {
         IsFailed = true;
+        IsPaused = false;
+        FailureMessage = error;
         Status = (chinese ? "失败：" : "Failed: ") + error;
         SpeedText = "";
         EtaText = "";
+        NotifyAll();
+    }
+
+    public void RestorePaused(bool chinese)
+    {
+        IsPaused = true;
+        IsCancelled = false;
+        IsFailed = false;
+        Status = chinese ? "已暂停（点击继续）" : "Paused — click Resume";
         NotifyAll();
     }
 
@@ -1272,6 +1371,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     {
         _chinese = chinese;
         if (IsCompleted) Status = (chinese ? "已完成 · " : "Completed · ") + Status.Split('·').Last().Trim();
+        else if (IsPaused) Status = chinese ? "已暂停（点击继续）" : "Paused — click Resume";
         else if (IsCancelled) Status = chinese ? "已取消（临时文件保留）" : "Cancelled (partial file kept)";
         else if (IsFailed && Status.Contains(':'))
         {
@@ -1284,7 +1384,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
 
     private void NotifyAll()
     {
-        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(CanRetry), nameof(RetryText), nameof(CancelText), nameof(IsFailed) })
+        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(CanRetry), nameof(RetryText), nameof(CancelText), nameof(IsFailed), nameof(IsPaused) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
