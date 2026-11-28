@@ -399,7 +399,8 @@ public partial class MainWindow : Window
         {
             try
             {
-                if (!Path.IsPathFullyQualified(pathBox.Text))
+                var enteredPath = pathBox.Text.Trim();
+                if (!Path.IsPathFullyQualified(enteredPath))
                     throw new ArgumentException(_chinese ? "请输入有效的绝对路径。" : "Enter a valid absolute folder path.");
                 var selected = Path.GetFullPath(enteredPath);
                 Directory.CreateDirectory(selected);
