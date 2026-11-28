@@ -32,7 +32,7 @@ public partial class MainWindow : Window
     private bool _ed2kPollInProgress;
     // Keep response bytes untouched: transparent decompression can invalidate byte offsets used by Range resume.
     private readonly HttpClient _http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None });
-    private readonly SemaphoreSlim _slots = new(3, 3);
+    private readonly SemaphoreSlim _slots;
     private readonly List<Task> _downloadTasks = new();
     private readonly string _queueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "downloads.json");
     private readonly string _videoQueueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "video-downloads.json");
@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         BitTorrentDownloadsList.ItemsSource = _bitTorrentItems;
         VideoDownloadsList.ItemsSource = _videoItems;
         _settings = DownoraSettings.Load(_settingsFile);
+        _settings.MaxConcurrentDownloads = Math.Clamp(_settings.MaxConcurrentDownloads, 1, 10);
+        _slots = new SemaphoreSlim(_settings.MaxConcurrentDownloads, _settings.MaxConcurrentDownloads);
         _root = string.IsNullOrWhiteSpace(_settings.DownloadDirectory)
             ? _root
             : Path.GetFullPath(_settings.DownloadDirectory);
@@ -344,6 +346,30 @@ public partial class MainWindow : Window
         panel.Children.Add(pathRow);
         panel.Children.Add(new TextBlock
         {
+            Text = _chinese ? "同时下载的普通文件任务数" : "Maximum simultaneous direct downloads",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 14, 0, 6)
+        });
+        var concurrencyBox = new ComboBox
+        {
+            Width = 120,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            ItemsSource = new[] { 1, 2, 3, 4, 5, 6, 8, 10 },
+            SelectedItem = _settings.MaxConcurrentDownloads
+        };
+        panel.Children.Add(concurrencyBox);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _chinese
+                ? "并发数更改将在下次启动时生效。视频和 BitTorrent 任务使用各自的引擎调度。"
+                : "Concurrency changes take effect after restarting. Video and BitTorrent tasks use their own schedulers.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush"),
+            Margin = new Thickness(0, 8, 0, 14)
+        });
+        panel.Children.Add(new TextBlock
+        {
             Text = _chinese
                 ? "更改后新建的普通下载和视频任务将使用此目录。BitTorrent 引擎目录不会自动迁移。"
                 : "New direct and video downloads use this folder. Existing files are not moved; the BitTorrent engine folder is separate.",
@@ -375,11 +401,12 @@ public partial class MainWindow : Window
             {
                 if (!Path.IsPathFullyQualified(pathBox.Text))
                     throw new ArgumentException(_chinese ? "请输入有效的绝对路径。" : "Enter a valid absolute folder path.");
-                var selected = Path.GetFullPath(pathBox.Text.Trim());
+                var selected = Path.GetFullPath(enteredPath);
                 Directory.CreateDirectory(selected);
                 _root = selected;
                 _settings.DownloadDirectory = selected;
                 _settings.ChineseLanguage = _chinese;
+                _settings.MaxConcurrentDownloads = concurrencyBox.SelectedItem is int count ? count : 3;
                 _settings.Save(_settingsFile);
                 FooterText.Text = _chinese ? "设置已保存" : "Settings saved";
                 dialog.Close();
