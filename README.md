@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine adapter are implemented in the codebase. The adapter supports adding Magnet links and .torrent files, pause/resume, task snapshots and removal; it is not yet connected to the main window's task list or verified in a live swarm. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine are integrated into the main window. Users can add Magnet links or browse for .torrent files, view progress, transfer speeds and peer counts, pause/resume tasks, and remove tasks while keeping downloaded data. Engine state is saved on exit, but automatic restoration of BitTorrent tasks and live-swarm validation are still pending. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
 
 ## Features
 
@@ -20,7 +20,7 @@
 - FTP / FTPS credentials stored in Windows Credential Manager
 - Safe filename handling, collision avoidance and rejection of credential-bearing URLs
 - BitTorrent magnet URI parsing (40-character hexadecimal and 32-character base32 info hashes, display names and HTTP/HTTPS/UDP tracker extraction)
-- Embedded MonoTorrent 3.0.2 adapter for Magnet / .torrent tasks, progress and speed snapshots, pause/resume, removal and fast-resume/DHT cache settings; UI integration and live swarm validation remain pending
+- Embedded MonoTorrent 3.0.2 engine with main-window task list for Magnet / .torrent tasks, progress, transfer speeds, peer counts, pause/resume and removal; state save on exit is present, automatic task restoration and live swarm validation remain pending
 
 ## Windows one-click installer
 
@@ -55,7 +55,8 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] eD2k queue / progress / speed / source synchronization and pause / resume / cancel controls
 - [x] Magnet URI parsing and info-hash validation
 - [x] Embedded MonoTorrent engine adapter foundation
-- [ ] BitTorrent task-list UI integration, persistence and live swarm validation
+- [x] BitTorrent task-list UI integration for Magnet and .torrent tasks, progress/speed/peer display and pause/resume/removal
+- [ ] BitTorrent task restoration after app restart and live swarm validation
 - [ ] M3U8 download and remux workflow
 - [ ] Browser handoff / extension
 - [ ] Clipboard monitoring, scheduler and publisher-checksum comparison
