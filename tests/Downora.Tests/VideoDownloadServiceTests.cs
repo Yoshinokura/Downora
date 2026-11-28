@@ -19,6 +19,23 @@ public sealed class VideoDownloadServiceTests
     }
 
     [Theory]
+    [InlineData("https://www.douyin.com/video/123")]
+    [InlineData("https://www.tiktok.com/@user/video/123")]
+    [InlineData("https://www.iqiyi.com/v_123.html")]
+    [InlineData("https://v.youku.com/v_show/id_123.html")]
+    [InlineData("https://www.mgtv.com/b/123")]
+    [InlineData("https://www.acfun.cn/v/ac123")]
+    [InlineData("https://www.ixigua.com/123")]
+    [InlineData("https://tv.sohu.com/v/123")]
+    [InlineData("https://weibo.com/123/video")]
+    [InlineData("https://www.douyu.com/123")]
+    [InlineData("https://www.huya.com/123")]
+    public void RecognizesMorePopularPlatforms(string value)
+    {
+        Assert.True(VideoDownloadService.IsSupportedPlatformUrl(new Uri(value)));
+    }
+
+    [Theory]
     [InlineData("https://example.com/video.mp4")]
     [InlineData("file:///C:/video.mp4")]
     [InlineData("ftp://youtube.com/video")]
