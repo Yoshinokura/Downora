@@ -88,6 +88,7 @@ public sealed class VideoDownloadService
         var result = await RunAsync(
             ["--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", "--no-call-home", "--", videoUrl.AbsoluteUri],
             cancellationToken);
+        if (result.ExitCode != 0) throw new InvalidOperationException(LastUsefulLine(result.StandardError, result.StandardOutput));
         using var json = JsonDocument.Parse(result.StandardOutput);
         var root = json.RootElement;
         var title = GetString(root, "title") ?? throw new InvalidDataException("The video platform did not return a title.");
@@ -100,7 +101,7 @@ public sealed class VideoDownloadService
             GetString(root, "id") ?? "");
     }
 
-    public async Task DownloadAsync(
+    public async Task<string> DownloadAsync(
         Uri videoUrl,
         string outputPathWithoutExtension,
         IProgress<VideoDownloadProgress>? progress = null,
@@ -114,14 +115,19 @@ public sealed class VideoDownloadService
         var args = new[]
         {
             "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings", "--no-call-home",
-            "--format", "bestvideo*+bestaudio/best",
-            "--merge-output-format", "mp4",
+            "--format", "best[height<=1080]/best",
+            "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
             "--", videoUrl.AbsoluteUri
         };
         var result = await RunAsync(args, cancellationToken, line => progress?.Report(ParseProgress(line)));
         if (result.ExitCode != 0)
             throw new InvalidOperationException(LastUsefulLine(result.StandardError, result.StandardOutput));
+        var finalPath = result.StandardOutput.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault(line => File.Exists(line.Trim()))?.Trim();
+        if (finalPath is null)
+            throw new IOException("yt-dlp finished without reporting an output file.");
+        return Path.GetFullPath(finalPath);
     }
 
     private static void ValidateVideoUrl(Uri uri)
