@@ -466,7 +466,7 @@ public partial class MainWindow : Window
             var folder = Path.Combine(_root, "Videos");
             Directory.CreateDirectory(folder);
             var outputBase = GetUniqueVideoBasePath(folder, safeTitle);
-            var item = new VideoDownloadItem(info, _chinese);
+            var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese);
             _videoItems.Insert(0, item);
             VideoTab.IsSelected = true;
             var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
@@ -513,6 +513,13 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is not VideoDownloadItem item || !item.CanCancel) return;
         item.Token.Cancel();
+    }
+
+    private void VideoRetryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not VideoDownloadItem item || !item.CanRetry) return;
+        item.PrepareRetry();
+        _videoTasks.Add(RunVideoDownloadAsync(item, item.SourceUri, item.OutputBasePath, item.MaxHeight));
     }
 
     private string? PromptForAmulePassword()
@@ -1169,7 +1176,10 @@ public partial class MainWindow : Window
 public sealed class VideoDownloadItem : INotifyPropertyChanged
 {
     public VideoPlatformInfo Info { get; }
-    public CancellationTokenSource Token { get; } = new();
+    public Uri SourceUri { get; }
+    public string OutputBasePath { get; }
+    public int? MaxHeight { get; }
+    public CancellationTokenSource Token { get; private set; } = new();
     public string Title { get; }
     public string Subtitle { get; }
     public string Status { get; private set; } = "";
@@ -1181,12 +1191,17 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public bool IsCancelled { get; private set; }
     public bool IsFailed { get; private set; }
     public bool CanCancel => !IsCompleted && !IsCancelled && !IsFailed && !Token.IsCancellationRequested;
+    public bool CanRetry => IsCancelled || IsFailed;
+    public string RetryText => _chinese ? "重试" : "Retry";
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public VideoDownloadItem(VideoPlatformInfo info, bool chinese)
+    public VideoDownloadItem(VideoPlatformInfo info, Uri sourceUri, string outputBasePath, int? maxHeight, bool chinese)
     {
         Info = info;
+        SourceUri = sourceUri;
+        OutputBasePath = outputBasePath;
+        MaxHeight = maxHeight;
         Title = info.Title;
         Subtitle = string.Join(" · ", new[] { info.Uploader, info.DurationSeconds is double seconds ? TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss") : null, info.Extractor }.Where(x => !string.IsNullOrWhiteSpace(x)));
         _chinese = chinese;
@@ -1194,6 +1209,20 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     }
 
     public void SetStatus(string status) { Status = status; NotifyAll(); }
+
+    public void PrepareRetry()
+    {
+        Token.Dispose();
+        Token = new CancellationTokenSource();
+        IsCancelled = false;
+        IsFailed = false;
+        Progress = 0;
+        ProgressText = "0%";
+        SpeedText = "";
+        EtaText = "";
+        Status = _chinese ? "重新加入队列" : "Queued for retry";
+        NotifyAll();
+    }
 
     public void Update(VideoDownloadProgress progress, bool chinese)
     {
@@ -1243,7 +1272,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
 
     private void NotifyAll()
     {
-        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(IsFailed) })
+        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(CanRetry), nameof(RetryText), nameof(IsFailed) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
