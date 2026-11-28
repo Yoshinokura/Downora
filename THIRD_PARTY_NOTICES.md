@@ -12,3 +12,11 @@ The PyInstaller-built standalone executable is distributed by the yt-dlp project
 - Release used by this integration: https://github.com/yt-dlp/yt-dlp/releases/tag/2026.11.23
 
 Users should review the upstream license and applicable platform terms before using the video downloader.
+
+## Deno JavaScript runtime
+
+For YouTube URLs, Downora downloads the official Deno Windows x64 runtime into the same local tools directory. The ZIP archive is verified against the SHA-256 digest published in the official Deno GitHub release before extraction.
+
+- Project and source: https://github.com/denoland/deno
+- License: https://github.com/denoland/deno/blob/main/LICENSE
+- Release used by this integration: https://github.com/denoland/deno/releases/tag/v2.9.8
