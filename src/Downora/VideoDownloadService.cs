@@ -141,7 +141,8 @@ public sealed class VideoDownloadService : IDisposable
         CancellationToken cancellationToken = default,
         int? maxHeight = 1080,
         bool audioOnly = false,
-        bool downloadSubtitles = false)
+        bool downloadSubtitles = false,
+        string subtitleLanguages = "all")
     {
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
@@ -155,7 +156,7 @@ public sealed class VideoDownloadService : IDisposable
             "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
             "--ffmpeg-location", FfmpegDirectory
         ]);
-        args.AddRange(BuildDownloadModeArguments(audioOnly, downloadSubtitles, maxHeight));
+        args.AddRange(BuildDownloadModeArguments(audioOnly, downloadSubtitles, maxHeight, subtitleLanguages));
         args.AddRange([
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
@@ -171,7 +172,8 @@ public sealed class VideoDownloadService : IDisposable
         return Path.GetFullPath(finalPath);
     }
 
-    public static IReadOnlyList<string> BuildDownloadModeArguments(bool audioOnly, bool downloadSubtitles, int? maxHeight)
+    public static IReadOnlyList<string> BuildDownloadModeArguments(
+        bool audioOnly, bool downloadSubtitles, int? maxHeight, string subtitleLanguages = "all")
     {
         var arguments = new List<string>();
         if (audioOnly)
@@ -189,9 +191,20 @@ public sealed class VideoDownloadService : IDisposable
         }
 
         if (downloadSubtitles)
-            arguments.AddRange(["--write-subs", "--write-auto-subs", "--sub-langs", "all,-live_chat", "--sub-format", "vtt/best"]);
+            arguments.AddRange([
+                "--write-subs", "--write-auto-subs", "--sub-langs",
+                NormalizeSubtitleLanguages(subtitleLanguages), "--sub-format", "vtt/best"
+            ]);
         return arguments;
     }
+
+    public static string NormalizeSubtitleLanguages(string? languages) => languages switch
+    {
+        "zh" => "zh,zh-Hans,zh-Hant,zh-CN,zh-TW",
+        "en" => "en,en-US,en-GB",
+        "zh,en" => "zh,zh-Hans,zh-Hant,zh-CN,zh-TW,en,en-US,en-GB",
+        _ => "all,-live_chat"
+    };
 
     private List<string> BuildRuntimeArguments(Uri videoUrl)
     {
