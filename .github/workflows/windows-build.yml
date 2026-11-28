@@ -56,11 +56,22 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "installer/Downora.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Smoke-test installer and write SHA-256
+        shell: pwsh
+        run: |
+          $installer = Get-Item installer/output/Downora-Setup.exe
+          if ($installer.Length -lt 1MB) { throw "x64 installer is unexpectedly small ($($installer.Length) bytes)." }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Downora-Setup.exe" | Set-Content installer/output/Downora-Setup.exe.sha256 -NoNewline
+          Write-Host "x64 installer size: $($installer.Length) bytes; SHA-256: $hash"
+
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: Downora-Windows-Setup
-          path: installer/output/Downora-Setup.exe
+          path: |
+            installer/output/Downora-Setup.exe
+            installer/output/Downora-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -109,11 +120,22 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DAppArchitecture=arm64" "/DMinWindowsVersion=10.0.22000" "/DOutputBaseName=Downora-Setup-ARM64" "installer/Downora.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Smoke-test ARM64 installer and write SHA-256
+        shell: pwsh
+        run: |
+          $installer = Get-Item installer/output/Downora-Setup-ARM64.exe
+          if ($installer.Length -lt 1MB) { throw "ARM64 installer is unexpectedly small ($($installer.Length) bytes)." }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Downora-Setup-ARM64.exe" | Set-Content installer/output/Downora-Setup-ARM64.exe.sha256 -NoNewline
+          Write-Host "ARM64 installer size: $($installer.Length) bytes; SHA-256: $hash"
+
       - name: Upload ARM64 installer
         uses: actions/upload-artifact@v4
         with:
           name: Downora-Windows-ARM64-Setup
-          path: installer/output/Downora-Setup-ARM64.exe
+          path: |
+            installer/output/Downora-Setup-ARM64.exe
+            installer/output/Downora-Setup-ARM64.exe.sha256
           if-no-files-found: error
           retention-days: 30
 
