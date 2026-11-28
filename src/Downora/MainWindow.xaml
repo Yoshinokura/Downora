@@ -9,7 +9,7 @@
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
         <Button x:Name="LanguageButton" Content="中文 / EN" Click="LanguageButton_Click"/>
         <Button x:Name="Ed2kSetupButton" Content="Set up eD2k" Click="Ed2kSetupButton_Click"/>
-        <Button Content="Settings" x:Name="SettingsButton"/>
+        <Button Content="Settings" x:Name="SettingsButton" Click="SettingsButton_Click"/>
       </StackPanel>
       <StackPanel>
         <TextBlock x:Name="AppTitle" Text="Downora" FontSize="30" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
