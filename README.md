@@ -2,14 +2,14 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> **Status: Beta preview (pre-release).** Downora is under active development; expect bugs, incomplete integrations and possible breaking changes. Back up important files before testing. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine are integrated into the main window. Users can add Magnet links or browse for .torrent files, view progress, transfer speeds and peer counts, pause/resume tasks, and remove tasks while keeping downloaded data. Engine state is saved on exit and restored at startup; live-swarm validation is still pending. Initial video-platform integration uses the official yt-dlp Windows binary to extract metadata and download supported Bilibili, YouTube, Douyin, TikTok, iQIYI, Youku, Mango TV, AcFun, Xigua, Sohu, Weibo, Vimeo, Dailymotion, Twitch, Douyu and Huya URLs. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
+> **Status: Beta preview (pre-release).** Downora is under active development; expect bugs, incomplete integrations and possible breaking changes. Back up important files before testing. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a configurable 1–10 task concurrency limit for direct downloads (default: three). It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine are integrated into the main window. Users can add Magnet links or browse for .torrent files, view progress, transfer speeds and peer counts, pause/resume tasks, and remove tasks while keeping downloaded data. Engine state is saved on exit and restored at startup; live-swarm validation is still pending. Initial video-platform integration uses the official yt-dlp Windows binary to extract metadata and download supported Bilibili, YouTube, Douyin, TikTok, iQIYI, Youku, Mango TV, AcFun, Xigua, Sohu, Weibo, Vimeo, Dailymotion, Twitch, Douyu and Huya URLs. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
 
 ## Features
 
 - Windows x64 desktop app (WPF, .NET 8) and a separate native Windows ARM64 build/installer (Windows 11 ARM64 target)
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch with the selected language persisted between launches
-- Settings dialog for choosing and persisting the default direct-download and video-download folder; changing the folder does not move existing files, and BitTorrent keeps its dedicated engine directory
+- Settings dialog for choosing and persisting the default direct-download and video-download folder and the maximum number of simultaneous direct downloads (1–10, applied after restart); changing the folder does not move existing files, and BitTorrent keeps its dedicated engine directory
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
 - Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
@@ -49,6 +49,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] English / 简体中文 UI
 - [x] Category-based save folders
 - [x] Queue persistence and recovery after app restart
+- [x] User-configurable direct-download concurrency (1–10, applied after restart)
 - [x] Four-way HTTP segmented downloads for range-capable servers (16 MiB+ files)
 - [x] FTP / explicit FTPS downloads and Windows Credential Manager authentication
 - [x] eD2k link parsing and submission to aMule REST API
