@@ -16,7 +16,7 @@ public sealed record VideoPlatformInfo(
     string Extractor,
     string VideoId);
 
-public sealed record VideoDownloadProgress(double Percent, string? Speed, string? Eta, string? Message);
+public sealed record VideoDownloadProgress(double? Percent, string? Speed, string? Eta, string? Message);
 
 /// <summary>
 /// Adapter around the official yt-dlp Windows binary. The binary is downloaded on first use
@@ -264,8 +264,8 @@ public sealed class VideoDownloadService : IDisposable
         var match = Regex.Match(line, @"^\[download\]\s+(?<percent>[\d.]+)%");
         var speed = Regex.Match(line, @"\bat\s+(?<speed>\S+)");
         var eta = Regex.Match(line, @"\bETA\s+(?<eta>\S+)");
-        var percent = match.Success && double.TryParse(match.Groups["percent"].Value,
-            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0;
+        double? percent = match.Success && double.TryParse(match.Groups["percent"].Value,
+            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : null;
         return new VideoDownloadProgress(percent,
             speed.Success ? speed.Groups["speed"].Value : null,
             eta.Success ? eta.Groups["eta"].Value : null, line);
