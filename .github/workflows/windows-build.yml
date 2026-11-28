@@ -26,6 +26,14 @@ jobs:
 
       - name: Publish self-contained Windows app
         run: dotnet publish src/Downora/Downora.csproj --configuration Release --runtime win-x64 --self-contained true --output publish
+      - name: Verify published executable is x64
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("publish/Downora.exe")
+          $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x8664) { throw ("Expected AMD64 PE machine 0x8664, got 0x{0:X4}" -f $machine) }
+          Write-Host "Verified Downora.exe PE machine: AMD64 (0x8664)"
 
       - name: Validate bundled eD2k setup script
         shell: pwsh
@@ -68,6 +76,14 @@ jobs:
 
       - name: Publish self-contained Windows ARM64 app
         run: dotnet publish src/Downora/Downora.csproj --configuration Release --runtime win-arm64 --self-contained true --output publish
+      - name: Verify published executable is ARM64
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("publish/Downora.exe")
+          $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0xAA64) { throw ("Expected ARM64 PE machine 0xAA64, got 0x{0:X4}" -f $machine) }
+          Write-Host "Verified Downora.exe PE machine: ARM64 (0xAA64)"
 
       - name: Validate bundled eD2k setup script
         shell: pwsh
