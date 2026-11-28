@@ -4,6 +4,12 @@
 #endif
 #define AppPublisher "R00TAdm1n"
 #define AppExeName "Downora.exe"
+#ifndef AppArchitecture
+  #define AppArchitecture "x64"
+#endif
+#ifndef OutputBaseName
+  #define OutputBaseName "Downora-Setup"
+#endif
 
 [Setup]
 AppId={{A2C5A2D4-6D31-4A4E-A3D7-7E0D9F2C41B8}
@@ -14,10 +20,10 @@ DefaultDirName={localappdata}\Programs\Downora
 DefaultGroupName=Downora
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed={#AppArchitecture}
+ArchitecturesInstallIn64BitMode={#AppArchitecture}
 OutputDir=output
-OutputBaseFilename=Downora-Setup
+OutputBaseFilename={#OutputBaseName}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
