@@ -90,6 +90,17 @@ public sealed class VideoDownloadServiceTests
     }
 
     [Theory]
+    [InlineData("zh", "zh,zh-Hans,zh-Hant,zh-CN,zh-TW")]
+    [InlineData("en", "en,en-US,en-GB")]
+    [InlineData("zh,en", "zh,zh-Hans,zh-Hant,zh-CN,zh-TW,en,en-US,en-GB")]
+    [InlineData("all", "all,-live_chat")]
+    [InlineData("unsupported", "all,-live_chat")]
+    public void SubtitleLanguagePresetMapsToSafeYtDlpLanguageList(string preset, string expected)
+    {
+        Assert.Equal(expected, VideoDownloadService.NormalizeSubtitleLanguages(preset));
+    }
+
+    [Theory]
     [InlineData("https://example.com/video.mp4")]
     [InlineData("file:///C:/video.mp4")]
     [InlineData("ftp://youtube.com/video")]
