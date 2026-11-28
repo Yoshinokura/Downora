@@ -206,6 +206,24 @@ public sealed class VideoDownloadService : IDisposable
         _ => "all,-live_chat"
     };
 
+    public static string FormatDownloadError(string? message)
+    {
+        var detail = message?.Trim() ?? "";
+        if (detail.Contains("sign in", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("login required", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("logged-in", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("members-only", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("private video", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("authentication required", StringComparison.OrdinalIgnoreCase))
+            return "This video requires account access or membership. Downora downloads public videos without login and does not bypass access restrictions.";
+
+        if (detail.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("forbidden", StringComparison.OrdinalIgnoreCase))
+            return "The platform denied this request. The video may be restricted or temporarily unavailable; Downora does not bypass platform access controls.";
+
+        return string.IsNullOrWhiteSpace(detail) ? "The video download failed." : detail;
+    }
+
     private List<string> BuildRuntimeArguments(Uri videoUrl)
     {
         var arguments = new List<string>();
