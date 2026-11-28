@@ -54,13 +54,16 @@ public sealed class VideoDownloadService : IDisposable
     {
         if (uri.Scheme is not ("http" or "https")) return false;
         var host = uri.IdnHost.TrimEnd('.').ToLowerInvariant();
-        return host == "youtube.com" || host.EndsWith(".youtube.com", StringComparison.Ordinal) ||
-               host == "youtu.be" ||
-               host == "bilibili.com" || host.EndsWith(".bilibili.com", StringComparison.Ordinal) ||
-               host == "b23.tv" ||
-               host == "vimeo.com" || host.EndsWith(".vimeo.com", StringComparison.Ordinal) ||
-               host == "dailymotion.com" || host.EndsWith(".dailymotion.com", StringComparison.Ordinal) ||
-               host == "twitch.tv" || host.EndsWith(".twitch.tv", StringComparison.Ordinal);
+        string[] domains =
+        [
+            "youtube.com", "youtu.be", "bilibili.com", "bilibili.tv", "b23.tv",
+            "vimeo.com", "dailymotion.com", "twitch.tv",
+            "douyin.com", "iesdouyin.com", "tiktok.com", "iqiyi.com", "iq.com",
+            "youku.com", "mgtv.com", "acfun.cn", "ixigua.com", "sohu.com",
+            "weibo.com", "weibo.cn", "douyu.com", "huya.com"
+        ];
+        return domains.Any(domain => host.Equals(domain, StringComparison.Ordinal) ||
+                                     host.EndsWith("." + domain, StringComparison.Ordinal));
     }
 
     public async Task EnsureInstalledAsync(CancellationToken cancellationToken = default)
