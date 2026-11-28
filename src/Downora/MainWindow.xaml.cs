@@ -1289,27 +1289,41 @@ public sealed class BitTorrentDownloadItem : INotifyPropertyChanged
     public string ActionText { get; private set; } = "Pause";
     public bool IsPaused { get; private set; }
     public bool IsComplete { get; private set; }
+    private bool _chinese;
+    private string _state = "Queued";
+    private int _connectedPeers;
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public BitTorrentDownloadItem(string infoHash, bool chinese) { InfoHash = infoHash; }
+    public BitTorrentDownloadItem(string infoHash, bool chinese)
+    {
+        InfoHash = infoHash;
+        _chinese = chinese;
+        RefreshLanguage(chinese);
+    }
 
     internal void Update(BitTorrentTaskSnapshot task, bool chinese)
     {
+        _state = task.State;
+        _connectedPeers = task.ConnectedPeers;
         Name = task.Name;
         Progress = task.Progress;
         ProgressText = task.SizeBytes > 0
             ? $"{Progress:0.0}% · {Format(task.SizeBytes * Progress / 100)} / {Format(task.SizeBytes)}"
             : $"{Progress:0.0}%";
         SpeedText = $"{Format(task.DownloadSpeedBytesPerSecond)}/s ↓  {Format(task.UploadSpeedBytesPerSecond)}/s ↑";
-        DetailText = chinese ? $"连接节点：{task.ConnectedPeers} · {InfoHash}" : $"Peers: {task.ConnectedPeers} · {InfoHash}";
         IsPaused = task.State.Equals("Paused", StringComparison.OrdinalIgnoreCase) || task.State.Equals("Stopped", StringComparison.OrdinalIgnoreCase);
         IsComplete = task.IsComplete;
-        StatusText = chinese ? $"状态：{Localize(task.State)}" : task.State;
+        RefreshLanguage(chinese);
+    }
+
+    public void RefreshLanguage(bool chinese)
+    {
+        _chinese = chinese;
+        DetailText = chinese ? $"连接节点：{_connectedPeers} · {InfoHash}" : $"Peers: {_connectedPeers} · {InfoHash}";
+        StatusText = chinese ? $"状态：{Localize(_state)}" : _state;
         ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
         NotifyAll();
     }
-
-    public void RefreshLanguage(bool chinese) => NotifyAll();
 
     private static string Localize(string state) => state.ToLowerInvariant() switch
     {
