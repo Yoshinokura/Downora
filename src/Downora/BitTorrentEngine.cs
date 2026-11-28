@@ -22,7 +22,7 @@ public sealed record BitTorrentTaskSnapshot(
 /// </summary>
 public sealed class BitTorrentEngine : IAsyncDisposable
 {
-    private readonly ClientEngine _engine;
+    private ClientEngine _engine;
     private readonly string _downloadDirectory;
     private bool _disposed;
 
@@ -105,6 +105,27 @@ public sealed class BitTorrentEngine : IAsyncDisposable
             manager,
             deleteDownloadedData ? RemoveMode.DownloadedDataOnly : RemoveMode.KeepAllData
         ).ConfigureAwait(false);
+    }
+
+    public async Task<bool> RestoreStateAsync(string stateFilePath)
+    {
+        ThrowIfDisposed();
+        var fullPath = Path.GetFullPath(stateFilePath);
+        if (!File.Exists(fullPath)) return false;
+
+        var restoredEngine = await ClientEngine.RestoreStateAsync(fullPath).ConfigureAwait(false);
+        try
+        {
+            await _engine.StopAllAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+        }
+        finally
+        {
+            _engine.Dispose();
+        }
+
+        _engine = restoredEngine;
+        await _engine.StartAllAsync().ConfigureAwait(false);
+        return true;
     }
 
     public async Task SaveStateAsync(string stateFilePath)
