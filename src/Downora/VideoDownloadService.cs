@@ -139,7 +139,9 @@ public sealed class VideoDownloadService : IDisposable
         string outputPathWithoutExtension,
         IProgress<VideoDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        int? maxHeight = 1080)
+        int? maxHeight = 1080,
+        bool audioOnly = false,
+        bool downloadSubtitles = false)
     {
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
@@ -151,11 +153,10 @@ public sealed class VideoDownloadService : IDisposable
         var args = BuildRuntimeArguments(videoUrl);
         args.AddRange([
             "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
-            "--ffmpeg-location", FfmpegDirectory,
-            "--format", maxHeight is > 0
-                ? $"bestvideo[height<={maxHeight}]+bestaudio/best[height<={maxHeight}]/best"
-                : "bestvideo+bestaudio/best",
-            "--merge-output-format", "mp4",
+            "--ffmpeg-location", FfmpegDirectory
+        ]);
+        args.AddRange(BuildDownloadModeArguments(audioOnly, downloadSubtitles, maxHeight));
+        args.AddRange([
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
             "--", videoUrl.AbsoluteUri
@@ -168,6 +169,28 @@ public sealed class VideoDownloadService : IDisposable
         if (finalPath is null)
             throw new IOException("yt-dlp finished without reporting an output file.");
         return Path.GetFullPath(finalPath);
+    }
+
+    public static IReadOnlyList<string> BuildDownloadModeArguments(bool audioOnly, bool downloadSubtitles, int? maxHeight)
+    {
+        var arguments = new List<string>();
+        if (audioOnly)
+        {
+            arguments.AddRange(["--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3"]);
+        }
+        else
+        {
+            arguments.AddRange([
+                "--format", maxHeight is > 0
+                    ? $"bestvideo[height<={maxHeight}]+bestaudio/best[height<={maxHeight}]/best"
+                    : "bestvideo+bestaudio/best",
+                "--merge-output-format", "mp4"
+            ]);
+        }
+
+        if (downloadSubtitles)
+            arguments.AddRange(["--write-subs", "--write-auto-subs", "--sub-langs", "all,-live_chat", "--sub-format", "vtt/best"]);
+        return arguments;
     }
 
     private List<string> BuildRuntimeArguments(Uri videoUrl)
