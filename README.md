@@ -6,7 +6,7 @@
 
 ## Features
 
-- Windows x64 desktop app (WPF, .NET 10) and a separate native Windows ARM64 build/installer (Windows 11 ARM64 target)
+- Windows x64 desktop app (WPF, .NET 10) and a separate native Windows ARM64 build/installer (Windows 10 ARM64 21H2+ and Windows 11 ARM64)
 - Material-inspired layout, light-first palette
 - English / 简体中文 language switch with the selected language persisted between launches
 - Settings dialog for choosing and persisting the default direct-download and video-download folder and the maximum number of simultaneous direct downloads (1–10, applied after restart); changing the folder does not move existing files, and BitTorrent keeps its dedicated engine directory
@@ -30,7 +30,14 @@ Downora is currently distributed as a **beta pre-release**, not a stable release
 
 The CI installer is currently an unsigned build artifact (not yet a signed public release). The separate aMule engine is not bundled into the Downora installer; users can set it up on demand with the in-app **Set up eD2k** button. The setup helper tries two geographically routed official SourceForge download endpoints, then the official GitHub release as a fallback. Every source is checked against the same pinned upstream SHA-256; failed or mismatched downloads are discarded. Actual mainland China speed still depends on the user's ISP and current international routing, so no fixed speed is guaranteed.
 
-## Windows compatibility\n\n- **x64:** Windows 10 build 14393 (1607) or later, subject to Microsoft's .NET 10 support matrix (Windows 10 support is limited to listed LTSC/Enterprise releases), plus Windows 11 x64.\n- **ARM64:** Windows 11 ARM64 (build 22000 or later).\n- **Not supported by this .NET 10/WPF edition:** Windows XP, Vista, 7 and 8/8.1. XP cannot run this modern self-contained WPF application. Supporting XP would require a separate legacy x86/x64 edition with a different UI/runtime and reduced feature set; it is not enabled by the current installer.\n\n## Run from source
+## Windows compatibility
+
+- **x64:** Windows 10 (build 14393 / 1607 or later) and Windows 11 x64.
+- **ARM64:** Windows 10 version 21H2 (build 19044) or later and Windows 11 ARM64. The ARM64 installer uses build 19044 as its minimum OS version.
+- **Runtime support note:** Downora is self-contained and does not require a separately installed .NET runtime. Microsoft's current .NET 10 support matrix limits Windows 10 support to specified LTSC / Enterprise editions; Windows 10 Home / Pro may work on compatible builds, but are outside Microsoft's listed .NET 10 support policy. Windows 11 x64 and ARM64 are supported targets.
+- Windows XP, Vista, 7, 8 and 8.1 are not supported.
+
+## Run from source
 
 1. Install the .NET 10 SDK on Windows.
 2. Open `src/Downora/Downora.csproj` in Visual Studio 2022 (or newer).
