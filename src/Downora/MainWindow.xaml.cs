@@ -469,7 +469,8 @@ public partial class MainWindow : Window
             var item = new VideoDownloadItem(info, _chinese);
             _videoItems.Insert(0, item);
             VideoTab.IsSelected = true;
-            _videoTasks.Add(RunVideoDownloadAsync(item, uri, outputBase));
+            var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
+            _videoTasks.Add(RunVideoDownloadAsync(item, uri, outputBase, selectedHeight));
             FooterText.Text = _chinese ? "视频任务已加入队列" : "Video task added to queue";
         }
         catch (Exception ex)
@@ -479,7 +480,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RunVideoDownloadAsync(VideoDownloadItem item, Uri uri, string outputBase)
+    private async Task RunVideoDownloadAsync(VideoDownloadItem item, Uri uri, string outputBase, int? maxHeight)
     {
         var enteredSlot = false;
         try
@@ -489,7 +490,7 @@ public partial class MainWindow : Window
             enteredSlot = true;
             item.SetStatus(_chinese ? "正在下载" : "Downloading");
             var progress = new Progress<VideoDownloadProgress>(value => item.Update(value, _chinese));
-            var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token);
+            var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token, maxHeight);
             item.SetCompleted(outputPath, _chinese);
             FooterText.Text = _chinese ? "视频下载完成" : "Video download complete";
             try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
