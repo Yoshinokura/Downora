@@ -223,11 +223,11 @@ public sealed class VideoDownloadService : IDisposable
             using (var archive = ZipFile.OpenRead(archivePath))
             {
                 var binEntries = archive.Entries.Where(entry =>
-                    entry.FullName.Replace('\\\\', '/').Contains("/bin/", StringComparison.OrdinalIgnoreCase) ||
+                    entry.FullName.Replace('\\', '/').Contains("/bin/", StringComparison.OrdinalIgnoreCase) ||
                     entry.FullName.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)).ToArray();
                 foreach (var entry in binEntries)
                 {
-                    var normalized = entry.FullName.Replace('\\\\', '/');
+                    var normalized = entry.FullName.Replace('\\', '/');
                     var binIndex = normalized.IndexOf("bin/", StringComparison.OrdinalIgnoreCase);
                     if (binIndex < 0) continue;
                     var relative = normalized[(binIndex + 4)..];
@@ -246,6 +246,7 @@ public sealed class VideoDownloadService : IDisposable
                 throw new InvalidDataException("The FFmpeg archive did not contain bin/ffmpeg.exe.");
             if (Directory.Exists(FfmpegDirectory)) Directory.Delete(FfmpegDirectory, true);
             Directory.Move(stagingDirectory, FfmpegDirectory);
+            await VerifyFfmpegAsync(cancellationToken);
         }
         catch
         {
@@ -258,6 +259,29 @@ public sealed class VideoDownloadService : IDisposable
             try { if (File.Exists(archivePath)) File.Delete(archivePath); } catch { }
             try { if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true); } catch { }
         }
+    }
+
+    private async Task VerifyFfmpegAsync(CancellationToken cancellationToken)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = FfmpegPath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            WorkingDirectory = FfmpegDirectory
+        };
+        start.ArgumentList.Add("-version");
+        using var process = new Process { StartInfo = start };
+        if (!process.Start()) throw new InvalidOperationException("Could not start FFmpeg.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        if (process.ExitCode != 0 || !stdout.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The installed FFmpeg runtime could not be started: " + stderr.Trim());
     }
 
     private async Task EnsureDenoInstalledAsync(CancellationToken cancellationToken)
