@@ -1179,9 +1179,12 @@ public partial class MainWindow : Window
             }
         }
 
-        foreach (var video in _videoItems)
-            if (video.CanCancel) video.Token.Cancel();
+        var videosToPause = _videoItems.Where(video => video.CanCancel).ToList();
+        foreach (var video in videosToPause) video.Token.Cancel();
         try { await Task.WhenAll(_downloadTasks.Concat(_videoTasks).ToArray()); } catch { }
+        foreach (var video in videosToPause.Where(video => !video.IsCompleted && !video.IsFailed))
+            video.RestorePaused(_chinese);
+        SaveVideoQueue();
         _ed2kRefreshTimer.Stop();
         _bitTorrentRefreshTimer.Stop();
         try { await _bitTorrentEngine.SaveStateAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "BitTorrentState.json")); } catch { }
