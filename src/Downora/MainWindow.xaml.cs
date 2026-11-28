@@ -302,6 +302,10 @@ public partial class MainWindow : Window
         _chinese = !_chinese;
         BitTorrentTab.Header = _chinese ? "BitTorrent 下载" : "BitTorrent";
         VideoTab.Header = _chinese ? "视频下载" : "Video downloads";
+        VideoModeBox.ToolTip = _chinese ? "下载视频或仅提取 MP3 音频" : "Download video or extract MP3 audio only";
+        VideoModeBox.Items[0] = new ComboBoxItem { Content = _chinese ? "视频" : "Video" };
+        VideoModeBox.Items[1] = new ComboBoxItem { Content = _chinese ? "仅音频 MP3" : "Audio MP3" };
+        VideoSubtitleCheckBox.Content = _chinese ? "字幕" : "Subtitles";
         foreach (var item in _videoItems) item.RefreshLanguage(_chinese);
         AddTorrentFileButton.Content = _chinese ? "＋  添加 .torrent 文件" : "＋  Add .torrent file";
         foreach (var item in _bitTorrentItems) item.RefreshLanguage(_chinese);
@@ -469,7 +473,9 @@ public partial class MainWindow : Window
             Directory.CreateDirectory(folder);
             var outputBase = GetUniqueVideoBasePath(folder, safeTitle);
             var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
-            var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese);
+            var audioOnly = VideoModeBox.SelectedIndex == 1;
+            var downloadSubtitles = VideoSubtitleCheckBox.IsChecked == true;
+            var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese, audioOnly, downloadSubtitles);
             _videoItems.Insert(0, item);
             SaveVideoQueue();
             VideoTab.IsSelected = true;
@@ -494,7 +500,8 @@ public partial class MainWindow : Window
             enteredSlot = true;
             item.SetStatus(_chinese ? "正在下载" : "Downloading");
             var progress = new Progress<VideoDownloadProgress>(value => item.Update(value, _chinese));
-            var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token, maxHeight);
+            var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token,
+                maxHeight, item.AudioOnly, item.DownloadSubtitles);
             item.SetCompleted(outputPath, _chinese);
             SaveVideoQueue();
             FooterText.Text = _chinese ? "视频下载完成" : "Video download complete";
@@ -1081,7 +1088,8 @@ public partial class MainWindow : Window
 
     private sealed record SavedVideoDownload(
         string Url, string OutputBasePath, int? MaxHeight, VideoPlatformInfo Info,
-        string State, string? CompletedPath, string? Error);
+        string State, string? CompletedPath, string? Error,
+        bool AudioOnly = false, bool DownloadSubtitles = false);
 
     private void LoadVideoQueue()
     {
@@ -1100,7 +1108,8 @@ public partial class MainWindow : Window
                 var outputBase = Path.GetFullPath(entry.OutputBasePath);
                 if (!outputBase.StartsWith(videoRoot, StringComparison.OrdinalIgnoreCase)) continue;
 
-                var item = new VideoDownloadItem(entry.Info, uri, outputBase, entry.MaxHeight, _chinese);
+                var item = new VideoDownloadItem(entry.Info, uri, outputBase, entry.MaxHeight, _chinese,
+                    entry.AudioOnly, entry.DownloadSubtitles);
                 if (entry.State == "Completed" && !string.IsNullOrWhiteSpace(entry.CompletedPath) &&
                     File.Exists(entry.CompletedPath))
                     item.SetCompleted(entry.CompletedPath, _chinese);
@@ -1136,7 +1145,9 @@ public partial class MainWindow : Window
                     item.IsCancelled ? "Cancelled" :
                     item.IsPaused ? "Paused" : "Active",
                 item.CompletedPath,
-                item.FailureMessage)).ToList();
+                item.FailureMessage,
+                item.AudioOnly,
+                item.DownloadSubtitles)).ToList();
             var temporary = _videoQueueFile + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }));
             File.Move(temporary, _videoQueueFile, true);
@@ -1259,6 +1270,8 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public Uri SourceUri { get; }
     public string OutputBasePath { get; }
     public int? MaxHeight { get; }
+    public bool AudioOnly { get; }
+    public bool DownloadSubtitles { get; }
     public CancellationTokenSource Token { get; private set; } = new();
     public string Title { get; }
     public string Subtitle { get; }
@@ -1280,12 +1293,15 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public VideoDownloadItem(VideoPlatformInfo info, Uri sourceUri, string outputBasePath, int? maxHeight, bool chinese)
+    public VideoDownloadItem(VideoPlatformInfo info, Uri sourceUri, string outputBasePath, int? maxHeight, bool chinese,
+        bool audioOnly = false, bool downloadSubtitles = false)
     {
         Info = info;
         SourceUri = sourceUri;
         OutputBasePath = outputBasePath;
         MaxHeight = maxHeight;
+        AudioOnly = audioOnly;
+        DownloadSubtitles = downloadSubtitles;
         Title = info.Title;
         Subtitle = string.Join(" · ", new[] { info.Uploader, info.DurationSeconds is double seconds ? TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss") : null, info.Extractor }.Where(x => !string.IsNullOrWhiteSpace(x)));
         _chinese = chinese;
