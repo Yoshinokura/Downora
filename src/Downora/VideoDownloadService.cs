@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 
 namespace Downora;
 
@@ -27,12 +28,35 @@ public sealed class VideoDownloadService : IDisposable
     public const string YtDlpVersion = "2026.11.23";
     public const string YtDlpSha256 = "622ed48023cac1daa52a3bf3a6ac38f03514de214b5f0fa069389fd0f6d17e5c";
     public const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.11.23/yt-dlp.exe";
+    public const string YtDlpArm64Sha256 = "9bb324203d02970b70dab6c9f6a48bd5ff185db7859d562cdacd1dc655ccb72a";
+    public const string YtDlpArm64DownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.11.23/yt-dlp_arm64.exe";
     public const string DenoVersion = "2.9.8";
     public const string DenoSha256 = "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf";
     public const string DenoDownloadUrl = "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip";
+    public const string DenoArm64Sha256 = "b413b92b735b50c198e8fe3b85af1aa50e29d5f72e229aab701d132286e14cef";
+    public const string DenoArm64DownloadUrl = "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-pc-windows-msvc.zip";
     public const string FfmpegVersion = "9.0.2";
     public const string FfmpegSha256 = "f7ba27e7986a2d0835881e742a682dec17896f6dc2cdcf9e596f043d2763d894";
     public const string FfmpegDownloadUrl = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-26-12-56/ffmpeg-n9.0.2-982-g836df4e858-win64-lgpl-shared-9.0.zip";
+    public const string FfmpegArm64Sha256 = "a07360e99c227539bd74ce8a08d91ef78f04d89cadd5313f24816179e2f5b31a";
+    public const string FfmpegArm64DownloadUrl = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-26-12-56/ffmpeg-n9.0.2-982-g836df4e858-winarm64-lgpl-shared-9.0.zip";
+
+    public sealed record RuntimeAssets(string YtDlpSha256, string YtDlpDownloadUrl,
+        string DenoSha256, string DenoDownloadUrl, string FfmpegSha256, string FfmpegDownloadUrl,
+        string Suffix, ushort PeMachine);
+
+    public static RuntimeAssets GetRuntimeAssets(Architecture architecture) => architecture switch
+    {
+        Architecture.Arm64 => new RuntimeAssets(YtDlpArm64Sha256, YtDlpArm64DownloadUrl,
+            DenoArm64Sha256, DenoArm64DownloadUrl, FfmpegArm64Sha256, FfmpegArm64DownloadUrl,
+            "-arm64", 0xAA64),
+        Architecture.X64 => new RuntimeAssets(YtDlpSha256, YtDlpDownloadUrl,
+            DenoSha256, DenoDownloadUrl, FfmpegSha256, FfmpegDownloadUrl,
+            "", 0x8664),
+        _ => throw new PlatformNotSupportedException($"Video helper tools are not packaged for {architecture}.")
+    };
+
+    private readonly RuntimeAssets _runtimeAssets = GetRuntimeAssets(RuntimeInformation.ProcessArchitecture);
 
     private readonly string _toolsDirectory;
     private readonly HttpClient _http;
@@ -48,9 +72,9 @@ public sealed class VideoDownloadService : IDisposable
         _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     }
 
-    public string ExecutablePath => Path.Combine(_toolsDirectory, "yt-dlp.exe");
-    public string DenoPath => Path.Combine(_toolsDirectory, "deno.exe");
-    public string FfmpegDirectory => Path.Combine(_toolsDirectory, "ffmpeg");
+    public string ExecutablePath => Path.Combine(_toolsDirectory, "yt-dlp" + _runtimeAssets.Suffix + ".exe");
+    public string DenoPath => Path.Combine(_toolsDirectory, "deno" + _runtimeAssets.Suffix + ".exe");
+    public string FfmpegDirectory => Path.Combine(_toolsDirectory, "ffmpeg" + _runtimeAssets.Suffix);
     public string FfmpegPath => Path.Combine(FfmpegDirectory, "ffmpeg.exe");
 
     public void Dispose()
@@ -87,21 +111,21 @@ public sealed class VideoDownloadService : IDisposable
         if (File.Exists(ExecutablePath))
         {
             var existingHash = await ComputeSha256Async(ExecutablePath, cancellationToken);
-            if (existingHash.Equals(YtDlpSha256, StringComparison.OrdinalIgnoreCase)) return;
+            if (existingHash.Equals(_runtimeAssets.YtDlpSha256, StringComparison.OrdinalIgnoreCase)) return;
             File.Delete(ExecutablePath);
         }
 
         var temporary = ExecutablePath + ".download";
         try
         {
-            using var response = await _http.GetAsync(YtDlpDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await _http.GetAsync(_runtimeAssets.YtDlpDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
             await using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, true))
                 await input.CopyToAsync(output, cancellationToken);
 
             var downloadedHash = await ComputeSha256Async(temporary, cancellationToken);
-            if (!downloadedHash.Equals(YtDlpSha256, StringComparison.OrdinalIgnoreCase))
+            if (!downloadedHash.Equals(_runtimeAssets.YtDlpSha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The downloaded yt-dlp binary failed SHA-256 verification.");
 
             File.Move(temporary, ExecutablePath, true);
@@ -253,7 +277,11 @@ public sealed class VideoDownloadService : IDisposable
         await _ffmpegInstallGate.WaitAsync(cancellationToken);
         try
         {
-            if (File.Exists(FfmpegPath)) return;
+            if (File.Exists(FfmpegPath))
+            {
+                await VerifyFfmpegAsync(cancellationToken);
+                return;
+            }
             await EnsureFfmpegInstalledCoreAsync(cancellationToken);
         }
         finally { _ffmpegInstallGate.Release(); }
@@ -266,7 +294,7 @@ public sealed class VideoDownloadService : IDisposable
         var stagingDirectory = Path.Combine(_toolsDirectory, "ffmpeg-staging");
         try
         {
-            using var response = await _http.GetAsync(FfmpegDownloadUrl,
+            using var response = await _http.GetAsync(_runtimeAssets.FfmpegDownloadUrl,
                 HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
@@ -275,7 +303,7 @@ public sealed class VideoDownloadService : IDisposable
                 await input.CopyToAsync(output, cancellationToken);
 
             var downloadedHash = await ComputeSha256Async(archivePath, cancellationToken);
-            if (!downloadedHash.Equals(FfmpegSha256, StringComparison.OrdinalIgnoreCase))
+            if (!downloadedHash.Equals(_runtimeAssets.FfmpegSha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The downloaded FFmpeg archive failed SHA-256 verification.");
 
             if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true);
@@ -324,6 +352,10 @@ public sealed class VideoDownloadService : IDisposable
 
     private async Task VerifyFfmpegAsync(CancellationToken cancellationToken)
     {
+        var machine = ReadPeMachine(FfmpegPath);
+        if (machine != _runtimeAssets.PeMachine)
+            throw new InvalidDataException($"The installed FFmpeg architecture is incorrect (PE machine 0x{machine:X4}; expected 0x{_runtimeAssets.PeMachine:X4}).");
+
         var start = new ProcessStartInfo
         {
             FileName = FfmpegPath,
@@ -354,26 +386,35 @@ public sealed class VideoDownloadService : IDisposable
 
     private async Task EnsureDenoInstalledCoreAsync(CancellationToken cancellationToken)
     {
-        if (File.Exists(DenoPath)) return;
+        if (File.Exists(DenoPath))
+        {
+            var existingHash = await ComputeSha256Async(DenoPath, cancellationToken);
+            if (existingHash.Equals(_runtimeAssets.DenoSha256, StringComparison.OrdinalIgnoreCase) &&
+                ReadPeMachine(DenoPath) == _runtimeAssets.PeMachine) return;
+            File.Delete(DenoPath);
+        }
 
         var zipPath = Path.Combine(_toolsDirectory, "deno.zip.download");
         var extractPath = Path.Combine(_toolsDirectory, "deno-extract");
         try
         {
-            using var response = await _http.GetAsync(DenoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await _http.GetAsync(_runtimeAssets.DenoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
             await using (var output = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, true))
                 await input.CopyToAsync(output, cancellationToken);
 
             var downloadedHash = await ComputeSha256Async(zipPath, cancellationToken);
-            if (!downloadedHash.Equals(DenoSha256, StringComparison.OrdinalIgnoreCase))
+            if (!downloadedHash.Equals(_runtimeAssets.DenoSha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The downloaded Deno runtime failed SHA-256 verification.");
 
             if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true);
             ZipFile.ExtractToDirectory(zipPath, extractPath, true);
             var extracted = Directory.GetFiles(extractPath, "deno.exe", SearchOption.AllDirectories).FirstOrDefault();
             if (extracted is null) throw new InvalidDataException("The Deno archive did not contain deno.exe.");
+            var denoMachine = ReadPeMachine(extracted);
+            if (denoMachine != _runtimeAssets.PeMachine)
+                throw new InvalidDataException($"The downloaded Deno architecture is incorrect (PE machine 0x{denoMachine:X4}; expected 0x{_runtimeAssets.PeMachine:X4}).");
             File.Move(extracted, DenoPath, true);
         }
         catch
@@ -466,6 +507,19 @@ public sealed class VideoDownloadService : IDisposable
     private static double? GetDouble(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number)
             ? number : null;
+
+    private static ushort ReadPeMachine(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var reader = new BinaryReader(stream);
+        if (reader.ReadUInt16() != 0x5A4D) throw new InvalidDataException("The executable is missing the MZ signature.");
+        stream.Position = 0x3C;
+        var peOffset = reader.ReadInt32();
+        if (peOffset < 0 || peOffset > stream.Length - 6) throw new InvalidDataException("The executable has an invalid PE header.");
+        stream.Position = peOffset;
+        if (reader.ReadUInt32() != 0x00004550) throw new InvalidDataException("The executable is missing the PE signature.");
+        return reader.ReadUInt16();
+    }
 
     private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
