@@ -19,7 +19,7 @@
 - Completion notification and automatic SHA-256 checksum display
 - FTP / FTPS credentials stored in Windows Credential Manager
 - Safe filename handling, collision avoidance and rejection of credential-bearing URLs
-- Video-platform URL detection and metadata extraction for Bilibili, YouTube, Douyin, TikTok, iQIYI, Youku, Mango TV, AcFun, Xigua, Sohu, Weibo, Vimeo, Dailymotion, Twitch, Douyu and Huya through yt-dlp; progress, cancellation and retry/resume of partial files are available in a dedicated video queue. The pinned yt-dlp and FFmpeg Windows runtimes are downloaded on first use and SHA-256 verified. Video downloads use anonymous access by default (no browser cookies or account login are required for publicly accessible videos), select the best available video and audio streams up to the chosen resolution, and merge separate tracks with an automatically provisioned, SHA-256-verified FFmpeg runtime. Login-, subscription- or permission-restricted content is not bypassed. Browser-cookie login and persistent video-task recovery are not implemented yet. For YouTube, the app also provisions a pinned Deno runtime and enables yt-dlp's EJS components automatically. See [third-party notices](THIRD_PARTY_NOTICES.md) for licensing details.
+- Video-platform URL detection and metadata extraction for Bilibili, YouTube, Douyin, TikTok, iQIYI, Youku, Mango TV, AcFun, Xigua, Sohu, Weibo, Vimeo, Dailymotion, Twitch, Douyu and Huya through yt-dlp; progress, cancellation and retry/resume of partial files are available in a dedicated video queue. The pinned yt-dlp and FFmpeg Windows runtimes are downloaded on first use and SHA-256 verified. Video downloads use anonymous access by default (no browser cookies or account login are required for publicly accessible videos), select the best available video and audio streams up to the chosen resolution, and merge separate tracks with an automatically provisioned, SHA-256-verified FFmpeg runtime. Login-, subscription- or permission-restricted content is not bypassed. Browser-cookie login is intentionally not required for public videos; video task details are persisted locally and unfinished tasks return paused after restart. For YouTube, the app also provisions a pinned Deno runtime and enables yt-dlp's EJS components automatically. See [third-party notices](THIRD_PARTY_NOTICES.md) for licensing details.
 - BitTorrent magnet URI parsing (40-character hexadecimal and 32-character base32 info hashes, display names and HTTP/HTTPS/UDP tracker extraction)
 - Embedded MonoTorrent 3.0.2 engine with main-window task list for Magnet / .torrent tasks, progress, transfer speeds, peer counts, pause/resume and removal; state save on exit and automatic task restoration at startup are implemented; live swarm validation remains pending
 
@@ -60,7 +60,7 @@ dotnet run --project .\src\Downora\Downora.csproj
 - [x] BitTorrent engine state save and task restoration at app restart
 - [ ] Live BitTorrent swarm validation
 - [x] Automatic FFmpeg provisioning and separate video/audio stream merging
-- [ ] Persistent video-task recovery
+- [x] Persistent video-task recovery (unfinished tasks restored paused; retry resumes partial files where yt-dlp can)
 - [ ] M3U8 download and remux workflow
 - [ ] Browser handoff / extension
 - [ ] Clipboard monitoring, scheduler and publisher-checksum comparison
