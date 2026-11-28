@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         VideoDownloadsList.ItemsSource = _videoItems;
         var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
         _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
-        _videoService = new VideoDownloadService(appData, _http);
+        _videoService = new VideoDownloadService(appData);
         _bitTorrentRefreshTimer.Tick += async (_, _) => await RefreshBitTorrentQueueAsync();
         _ed2kRefreshTimer.Tick += async (_, _) => await RefreshEd2kQueueAsync();
         _ed2kRefreshTimer.Start();
@@ -1103,6 +1103,7 @@ public partial class MainWindow : Window
         _bitTorrentRefreshTimer.Stop();
         try { await _bitTorrentEngine.SaveStateAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "BitTorrentState.json")); } catch { }
         try { await _bitTorrentEngine.DisposeAsync(); } catch { }
+        _videoService.Dispose();
         SaveQueue();
         _allowClose = true;
         Close();
