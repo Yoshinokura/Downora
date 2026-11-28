@@ -106,7 +106,8 @@ public sealed class VideoDownloadServiceTests
     [InlineData("HTTP Error 403: Forbidden", false, "platform denied")]
     public void RestrictedVideoErrorsExplainAnonymousAccessPolicy(string error, bool chinese, string expectedText)
     {
-        Assert.Contains(expectedText, VideoDownloadService.FormatDownloadError(error, chinese), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedText.ToLowerInvariant(),
+            VideoDownloadService.FormatDownloadError(error, chinese).ToLowerInvariant());
     }
 
     [Theory]
