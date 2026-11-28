@@ -37,6 +37,33 @@ public sealed class VideoDownloadServiceTests
     }
 
     [Fact]
+    public void Arm64RuntimeSelectsNativePinnedVideoTools()
+    {
+        var assets = VideoDownloadService.GetRuntimeAssets(System.Runtime.InteropServices.Architecture.Arm64);
+
+        Assert.Equal(VideoDownloadService.YtDlpArm64Sha256, assets.YtDlpSha256);
+        Assert.Contains("yt-dlp_arm64.exe", assets.YtDlpDownloadUrl);
+        Assert.Equal(VideoDownloadService.DenoArm64Sha256, assets.DenoSha256);
+        Assert.Contains("aarch64-pc-windows-msvc.zip", assets.DenoDownloadUrl);
+        Assert.Equal(VideoDownloadService.FfmpegArm64Sha256, assets.FfmpegSha256);
+        Assert.Contains("winarm64", assets.FfmpegDownloadUrl);
+        Assert.Equal("-arm64", assets.Suffix);
+        Assert.Equal((ushort)0xAA64, assets.PeMachine);
+    }
+
+    [Fact]
+    public void X64RuntimeKeepsExistingPinnedVideoTools()
+    {
+        var assets = VideoDownloadService.GetRuntimeAssets(System.Runtime.InteropServices.Architecture.X64);
+
+        Assert.Equal(VideoDownloadService.YtDlpSha256, assets.YtDlpSha256);
+        Assert.Equal(VideoDownloadService.DenoSha256, assets.DenoSha256);
+        Assert.Equal(VideoDownloadService.FfmpegSha256, assets.FfmpegSha256);
+        Assert.Equal("", assets.Suffix);
+        Assert.Equal((ushort)0x8664, assets.PeMachine);
+    }
+
+    [Fact]
     public void FfmpegRuntimeUsesPinnedWindowsBuildAndSha256()
     {
         Assert.Matches("^[0-9a-f]{64}$", VideoDownloadService.FfmpegSha256);
