@@ -49,6 +49,32 @@ public sealed class HlsPlaylistTests
         Assert.Throws<NotSupportedException>(() => HlsPlaylist.Parse(playlist, PlaylistUri));
     }
 
+
+    [Fact]
+    public void SelectsHighestBandwidthVariant()
+    {
+        const string master = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=640000,RESOLUTION=640x360
+            low/index.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1920x1080
+            ../high/index.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=1280x720
+            medium/index.m3u8
+            """;
+
+        var selected = HlsPlaylist.SelectVariantPlaylist(master, PlaylistUri);
+
+        Assert.Equal("https://media.example.test/high/index.m3u8", selected.AbsoluteUri);
+    }
+
+    [Fact]
+    public void RejectsMasterPlaylistWithoutBandwidth()
+    {
+        const string master = "#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=1280x720\nvariant.m3u8";
+        Assert.Throws<InvalidDataException>(() => HlsPlaylist.SelectVariantPlaylist(master, PlaylistUri));
+    }
+
     [Fact]
     public void RejectsMasterPlaylist()
     {
