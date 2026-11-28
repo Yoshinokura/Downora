@@ -19,7 +19,7 @@
     <Border Grid.Row="1" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="16" Margin="0,0,0,18">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste an HTTP, HTTPS, FTP, FTPS, eD2k or BitTorrent Magnet link" KeyDown="UrlBox_KeyDown"/>
+        <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste a direct link, Bilibili / YouTube video URL, eD2k or BitTorrent Magnet link" KeyDown="UrlBox_KeyDown"/>
         <Button Grid.Column="1" Content="＋  Add download" Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="22,10" Click="AddButton_Click"/>
       </Grid>
     </Border>
@@ -56,6 +56,33 @@
             </DataTemplate>
           </ListView.ItemTemplate>
         </ListView>
+          </TabItem>
+          <TabItem x:Name="VideoTab" Header="Video downloads">
+            <ListView x:Name="VideoDownloadsList" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListView.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="#EEF0F2" BorderThickness="0,0,0,1" Padding="8,13">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="#202124" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="#80868B" Margin="0,3,0,0"/>
+                        <TextBlock Text="{Binding Status}" FontSize="12" Foreground="#5F6368" Margin="0,4,0,0"/>
+                        <ProgressBar Value="{Binding Progress}" Maximum="100" Height="5" Margin="0,9,10,0" Foreground="#1A73E8" Background="#E8EAED"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ProgressText}" Foreground="#3C4043" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding SpeedText}" FontSize="11" Foreground="#80868B" HorizontalAlignment="Right" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding EtaText}" FontSize="11" Foreground="#80868B" HorizontalAlignment="Right"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Cancel" Tag="{Binding}" IsEnabled="{Binding CanCancel}" Click="VideoCancelButton_Click"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListView.ItemTemplate>
+            </ListView>
           </TabItem>
           <TabItem x:Name="Ed2kTab" Header="eD2k downloads">
             <ListView x:Name="Ed2kDownloadsList" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
