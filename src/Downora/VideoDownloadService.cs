@@ -252,6 +252,7 @@ public sealed class VideoDownloadService : IDisposable
         {
             try { if (File.Exists(archivePath)) File.Delete(archivePath); } catch { }
             try { if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true); } catch { }
+            try { if (Directory.Exists(FfmpegDirectory)) Directory.Delete(FfmpegDirectory, true); } catch { }
             throw;
         }
         finally
