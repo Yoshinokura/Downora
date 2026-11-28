@@ -82,7 +82,8 @@
                         <TextBlock Text="{Binding EtaText}" FontSize="11" Foreground="#80868B" HorizontalAlignment="Right"/>
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="Cancel" Tag="{Binding}" IsEnabled="{Binding CanCancel}" Click="VideoCancelButton_Click"/>
+                        <Button Content="Cancel" Tag="{Binding}" IsEnabled="{Binding CanCancel}" Click="VideoCancelButton_Click" Margin="0,0,6,0"/>
+                        <Button Content="{Binding RetryText}" Tag="{Binding}" IsEnabled="{Binding CanRetry}" Click="VideoRetryButton_Click"/>
                       </StackPanel>
                     </Grid>
                   </Border>
