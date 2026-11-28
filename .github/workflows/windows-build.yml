@@ -3,12 +3,13 @@ name: Windows build
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -51,7 +52,7 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $version = "0.1.$env:GITHUB_RUN_NUMBER"
+          $version = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF_NAME.Substring(1) } else { "0.1.$env:GITHUB_RUN_NUMBER" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "installer/Downora.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -112,3 +113,37 @@ jobs:
           path: installer/output/Downora-Setup-ARM64.exe
           if-no-files-found: error
           retention-days: 30
+
+  publish-beta:
+    name: Publish GitHub beta release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ build, build-arm64 ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download x64 and ARM64 installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish beta release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Downora ${{ github.ref_name }} Beta
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/Downora-Setup.exe
+            release-assets/Downora-Setup-ARM64.exe
+          body: |
+            ## Downora Beta / 测试版
+
+            This is a pre-release for testing, not a stable release.
+            此版本仅供测试，不代表正式稳定版。
+
+            - Windows x64 installer: `Downora-Setup.exe`
+            - Windows ARM64 installer: `Downora-Setup-ARM64.exe`
+
+            Please report bugs through GitHub Issues. Back up important downloads and settings before upgrading.
