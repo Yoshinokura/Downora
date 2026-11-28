@@ -123,7 +123,8 @@ public sealed class VideoDownloadService : IDisposable
         Uri videoUrl,
         string outputPathWithoutExtension,
         IProgress<VideoDownloadProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? maxHeight = 1080)
     {
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
@@ -134,7 +135,7 @@ public sealed class VideoDownloadService : IDisposable
         var args = BuildRuntimeArguments(videoUrl);
         args.AddRange([
             "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
-            "--format", "best[height<=1080]/best",
+            "--format", maxHeight is > 0 ? $"best[height<={maxHeight}]/best" : "best",
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
             "--", videoUrl.AbsoluteUri
