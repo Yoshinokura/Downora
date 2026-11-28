@@ -20,3 +20,16 @@ For YouTube URLs, Downora downloads the official Deno Windows x64 runtime into t
 - Project and source: https://github.com/denoland/deno
 - License: https://github.com/denoland/deno/blob/main/LICENSE
 - Release used by this integration: https://github.com/denoland/deno/releases/tag/v2.9.8
+
+
+## FFmpeg
+
+For video downloads, Downora downloads the Windows x64 LGPL shared build from the FFmpeg-Builds project (a Windows build provider linked by the official FFmpeg download page). The ZIP asset is pinned to a specific upstream release and verified against its GitHub SHA-256 asset digest before the executables and required DLLs are extracted. FFmpeg runs as a separate process and is not bundled into the Downora installer.
+
+- FFmpeg project and license information: https://ffmpeg.org/legal.html
+- Official Windows build-provider links: https://ffmpeg.org/download.html
+- Build project and source: https://github.com/FFmpeg-Builds/FFmpeg-Builds
+- Pinned build release: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/autobuild-2026-11-26-12-56
+- Selected asset: `ffmpeg-n9.0.2-982-g836df4e858-win64-lgpl-shared-9.0.zip`
+
+The selected archive is the LGPL variant. Review the included upstream license files and build configuration when redistributing or modifying this runtime.
