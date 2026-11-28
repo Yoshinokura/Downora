@@ -524,7 +524,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            item.SetFailed(ex.Message, _chinese);
+            item.SetFailed(VideoDownloadService.FormatDownloadError(ex.Message, _chinese), _chinese);
             SaveVideoQueue();
         }
         finally
