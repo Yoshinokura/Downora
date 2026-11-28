@@ -67,6 +67,28 @@ public sealed class VideoDownloadServiceTests
         item.Token.Dispose();
     }
 
+    [Fact]
+    public void AudioOnlyModeExtractsMp3WithoutVideoMerge()
+    {
+        var args = VideoDownloadService.BuildDownloadModeArguments(audioOnly: true, downloadSubtitles: false, maxHeight: 1080);
+
+        Assert.Contains("--extract-audio", args);
+        Assert.Contains("mp3", args);
+        Assert.Contains("bestaudio/best", args);
+        Assert.DoesNotContain("--merge-output-format", args);
+    }
+
+    [Fact]
+    public void SubtitleOptionDownloadsManualAndAutomaticSubtitles()
+    {
+        var args = VideoDownloadService.BuildDownloadModeArguments(audioOnly: false, downloadSubtitles: true, maxHeight: 2160);
+
+        Assert.Contains("--write-subs", args);
+        Assert.Contains("--write-auto-subs", args);
+        Assert.Contains("--sub-langs", args);
+        Assert.Contains("bestvideo[height<=2160]+bestaudio/best[height<=2160]/best", args);
+    }
+
     [Theory]
     [InlineData("https://example.com/video.mp4")]
     [InlineData("file:///C:/video.mp4")]
