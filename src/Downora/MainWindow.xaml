@@ -18,15 +18,23 @@
     </DockPanel>
     <Border Grid.Row="1" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="16" Margin="0,0,0,18">
       <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
         <TextBox x:Name="UrlBox" VerticalContentAlignment="Center" ToolTip="Paste a direct link, Bilibili / YouTube video URL, eD2k or BitTorrent Magnet link" KeyDown="UrlBox_KeyDown"/>
-        <ComboBox x:Name="VideoQualityBox" Grid.Column="1" Width="112" Margin="10,0" VerticalContentAlignment="Center" SelectedIndex="2" ToolTip="Video quality (applies to platform video downloads)">
+        <ComboBox x:Name="VideoQualityBox" Grid.Column="1" Width="92" Margin="8,0" VerticalContentAlignment="Center" SelectedIndex="2" ToolTip="Video quality (applies to platform video downloads)">
           <ComboBoxItem Content="480p"/>
           <ComboBoxItem Content="720p"/>
           <ComboBoxItem Content="1080p"/>
           <ComboBoxItem Content="Best"/>
         </ComboBox>
-        <Button Grid.Column="2" Content="＋  Add download" Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="22,10" Click="AddButton_Click"/>
+        <ComboBox x:Name="VideoModeBox" Grid.Column="2" Width="104" Margin="0,0,8,0" VerticalContentAlignment="Center" SelectedIndex="0" ToolTip="Video or audio-only MP3">
+          <ComboBoxItem Content="Video"/>
+          <ComboBoxItem Content="Audio MP3"/>
+        </ComboBox>
+        <CheckBox x:Name="VideoSubtitleCheckBox" Grid.Column="3" Content="Subtitles" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="Download available subtitles"/>
+        <Button Grid.Column="4" Content="＋  Add download" Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="18,10" Click="AddButton_Click"/>
       </Grid>
     </Border>
     <Border Grid.Row="2" Background="{StaticResource CardBrush}" CornerRadius="18" Padding="18">
