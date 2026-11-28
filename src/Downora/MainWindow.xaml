@@ -27,6 +27,8 @@
           <ComboBoxItem Content="480p"/>
           <ComboBoxItem Content="720p"/>
           <ComboBoxItem Content="1080p"/>
+          <ComboBoxItem Content="1440p"/>
+          <ComboBoxItem Content="2160p (4K)"/>
           <ComboBoxItem Content="Best"/>
         </ComboBox>
         <ComboBox x:Name="VideoModeBox" Grid.Column="2" Width="104" Margin="0,0,8,0" VerticalContentAlignment="Center" SelectedIndex="0" ToolTip="Video or audio-only MP3">
