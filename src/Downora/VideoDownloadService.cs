@@ -22,7 +22,7 @@ public sealed record VideoDownloadProgress(double Percent, string? Speed, string
 /// Adapter around the official yt-dlp Windows binary. The binary is downloaded on first use
 /// and verified against the SHA-256 digest published in the official GitHub release metadata.
 /// </summary>
-public sealed class VideoDownloadService
+public sealed class VideoDownloadService : IDisposable
 {
     public const string YtDlpVersion = "2026.11.23";
     public const string YtDlpSha256 = "622ed48023cac1daa52a3bf3a6ac38f03514de214b5f0fa069389fd0f6d17e5c";
@@ -33,15 +33,22 @@ public sealed class VideoDownloadService
 
     private readonly string _toolsDirectory;
     private readonly HttpClient _http;
+    private readonly bool _ownsHttp;
 
     public VideoDownloadService(string appDataDirectory, HttpClient? httpClient = null)
     {
         _toolsDirectory = Path.Combine(appDataDirectory, "Tools");
+        _ownsHttp = httpClient is null;
         _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     }
 
     public string ExecutablePath => Path.Combine(_toolsDirectory, "yt-dlp.exe");
     public string DenoPath => Path.Combine(_toolsDirectory, "deno.exe");
+
+    public void Dispose()
+    {
+        if (_ownsHttp) _http.Dispose();
+    }
 
     public static bool IsSupportedPlatformUrl(Uri uri)
     {
