@@ -1193,6 +1193,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public bool CanCancel => !IsCompleted && !IsCancelled && !IsFailed && !Token.IsCancellationRequested;
     public bool CanRetry => IsCancelled || IsFailed;
     public string RetryText => _chinese ? "重试" : "Retry";
+    public string CancelText => _chinese ? "取消" : "Cancel";
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -1227,10 +1228,13 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public void Update(VideoDownloadProgress progress, bool chinese)
     {
         _chinese = chinese;
-        Progress = Math.Clamp(progress.Percent, 0, 100);
-        ProgressText = $"{Progress:0.0}%";
-        SpeedText = progress.Speed ?? "";
-        EtaText = progress.Eta is null ? "" : (chinese ? "剩余 " : "ETA ") + progress.Eta;
+        if (progress.Percent is double percent)
+        {
+            Progress = Math.Clamp(percent, 0, 100);
+            ProgressText = $"{Progress:0.0}%";
+        }
+        if (progress.Speed is not null) SpeedText = progress.Speed;
+        if (progress.Eta is not null) EtaText = (chinese ? "剩余 " : "ETA ") + progress.Eta;
         Status = chinese ? "正在下载" : "Downloading";
         NotifyAll();
     }
@@ -1267,12 +1271,20 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public void RefreshLanguage(bool chinese)
     {
         _chinese = chinese;
+        if (IsCompleted) Status = (chinese ? "已完成 · " : "Completed · ") + Status.Split('·').Last().Trim();
+        else if (IsCancelled) Status = chinese ? "已取消（临时文件保留）" : "Cancelled (partial file kept)";
+        else if (IsFailed && Status.Contains(':'))
+        {
+            var error = Status[(Status.IndexOf(':') + 1)..].Trim();
+            Status = (chinese ? "失败：" : "Failed: ") + error;
+        }
+        else if (!IsFailed && !IsCancelled) Status = chinese ? "正在下载" : "Downloading";
         NotifyAll();
     }
 
     private void NotifyAll()
     {
-        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(CanRetry), nameof(RetryText), nameof(IsFailed) })
+        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(CanRetry), nameof(RetryText), nameof(CancelText), nameof(IsFailed) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
