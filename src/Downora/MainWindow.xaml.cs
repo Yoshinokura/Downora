@@ -466,10 +466,10 @@ public partial class MainWindow : Window
             var folder = Path.Combine(_root, "Videos");
             Directory.CreateDirectory(folder);
             var outputBase = GetUniqueVideoBasePath(folder, safeTitle);
+            var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
             var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese);
             _videoItems.Insert(0, item);
             VideoTab.IsSelected = true;
-            var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
             _videoTasks.Add(RunVideoDownloadAsync(item, uri, outputBase, selectedHeight));
             FooterText.Text = _chinese ? "视频任务已加入队列" : "Video task added to queue";
         }
