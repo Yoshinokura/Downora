@@ -38,7 +38,9 @@ public partial class MainWindow : Window
     private readonly string _videoQueueFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "video-downloads.json");
     private bool _allowClose;
     private bool _chinese;
-    private readonly string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
+    private string _root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
+    private readonly string _settingsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "settings.json");
+    private DownoraSettings _settings = new();
 
     public MainWindow()
     {
@@ -47,6 +49,11 @@ public partial class MainWindow : Window
         Ed2kDownloadsList.ItemsSource = _ed2kItems;
         BitTorrentDownloadsList.ItemsSource = _bitTorrentItems;
         VideoDownloadsList.ItemsSource = _videoItems;
+        _settings = DownoraSettings.Load(_settingsFile);
+        _root = string.IsNullOrWhiteSpace(_settings.DownloadDirectory)
+            ? _root
+            : Path.GetFullPath(_settings.DownloadDirectory);
+        _chinese = _settings.ChineseLanguage;
         var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
         _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
         _videoService = new VideoDownloadService(appData);
@@ -297,9 +304,96 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var panel = new StackPanel { Margin = new Thickness(22), Width = 480 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = _chinese ? "默认下载目录（普通文件与视频）" : "Default download folder (direct files and videos)",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        var pathRow = new DockPanel { LastChildFill = true };
+        var pathBox = new TextBox
+        {
+            Text = _root,
+            MinWidth = 320,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var browseButton = new Button { Content = _chinese ? "浏览…" : "Browse…", Padding = new Thickness(12, 6, 12, 6) };
+        browseButton.Click += (_, _) =>
+        {
+            var picker = new OpenFolderDialog
+            {
+                Title = _chinese ? "选择默认下载目录" : "Choose download folder",
+                InitialDirectory = Directory.Exists(pathBox.Text) ? pathBox.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Multiselect = false
+            };
+            if (picker.ShowDialog(this) == true) pathBox.Text = picker.FolderName;
+        };
+        DockPanel.SetDock(browseButton, Dock.Right);
+        pathRow.Children.Add(browseButton);
+        pathRow.Children.Add(pathBox);
+        panel.Children.Add(pathRow);
+        panel.Children.Add(new TextBlock
+        {
+            Text = _chinese
+                ? "更改后新建的普通下载和视频任务将使用此目录。BitTorrent 引擎目录不会自动迁移。"
+                : "New direct and video downloads use this folder. Existing files are not moved; the BitTorrent engine folder is separate.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush"),
+            Margin = new Thickness(0, 10, 0, 18)
+        });
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var cancel = new Button { Content = _chinese ? "取消" : "Cancel", Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(0, 0, 8, 0) };
+        var save = new Button { Content = _chinese ? "保存" : "Save", Padding = new Thickness(16, 7, 16, 7), IsDefault = true };
+        actions.Children.Add(cancel);
+        actions.Children.Add(save);
+        panel.Children.Add(actions);
+        var dialog = new Window
+        {
+            Title = _chinese ? "Downora 设置" : "Downora Settings",
+            Owner = this,
+            Content = panel,
+            SizeToContent = SizeToContent.Height,
+            Width = 560,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = (System.Windows.Media.Brush)FindResource("SurfaceBrush")
+        };
+        cancel.Click += (_, _) => dialog.Close();
+        save.Click += (_, _) =>
+        {
+            try
+            {
+                if (!Path.IsPathFullyQualified(pathBox.Text))
+                    throw new ArgumentException(_chinese ? "请输入有效的绝对路径。" : "Enter a valid absolute folder path.");
+                var selected = Path.GetFullPath(pathBox.Text.Trim());
+                Directory.CreateDirectory(selected);
+                _root = selected;
+                _settings.DownloadDirectory = selected;
+                _settings.ChineseLanguage = _chinese;
+                _settings.Save(_settingsFile);
+                FooterText.Text = _chinese ? "设置已保存" : "Settings saved";
+                dialog.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show((_chinese ? "无法保存设置：" : "Could not save settings: ") + ex.Message,
+                    "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        };
+        dialog.ShowDialog();
+    }
+
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
     {
         _chinese = !_chinese;
+        _settings.ChineseLanguage = _chinese;
+        try { _settings.Save(_settingsFile); }
+        catch (Exception ex) { FooterText.Text = (_chinese ? "语言设置保存失败：" : "Could not save language preference: ") + ex.Message; }
         BitTorrentTab.Header = _chinese ? "BitTorrent 下载" : "BitTorrent";
         VideoTab.Header = _chinese ? "视频下载" : "Video downloads";
         VideoModeBox.ToolTip = _chinese ? "下载视频或仅提取 MP3 音频" : "Download video or extract MP3 audio only";
