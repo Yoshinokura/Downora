@@ -1,4 +1,5 @@
 using Xunit;
+using System.IO;
 using Downora;
 
 namespace Downora.Tests;
@@ -41,6 +42,28 @@ public sealed class VideoDownloadServiceTests
         Assert.Matches("^[0-9a-f]{64}$", VideoDownloadService.FfmpegSha256);
         Assert.Contains("win64-lgpl-shared", VideoDownloadService.FfmpegDownloadUrl);
         Assert.StartsWith("https://github.com/", VideoDownloadService.FfmpegDownloadUrl);
+    }
+
+    [Theory]
+    [InlineData(true, "继续")]
+    [InlineData(false, "Resume")]
+    public void RestoredVideoTaskCanBeResumed(bool chinese, string expectedLabel)
+    {
+        var info = new VideoPlatformInfo("Sample video", "Uploader", 60, null, "YouTube", "abc123");
+        using var item = new VideoDownloadItem(info, new Uri("https://youtu.be/abc123"),
+            Path.Combine(Path.GetTempPath(), "Downora", "Videos", "Sample video"), 1080, chinese);
+
+        item.RestorePaused(chinese);
+
+        Assert.True(item.IsPaused);
+        Assert.True(item.CanRetry);
+        Assert.False(item.CanCancel);
+        Assert.Equal(expectedLabel, item.RetryText);
+
+        item.PrepareRetry();
+        Assert.False(item.IsPaused);
+        Assert.True(item.CanCancel);
+        Assert.False(item.CanRetry);
     }
 
     [Theory]
