@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Win32;
 using System.Windows.Threading;
 
 namespace Downora;
@@ -19,6 +20,10 @@ public partial class MainWindow : Window
 {
     private readonly ObservableCollection<DownloadItem> _items = new();
     private readonly ObservableCollection<Ed2kDownloadItem> _ed2kItems = new();
+    private readonly ObservableCollection<BitTorrentDownloadItem> _bitTorrentItems = new();
+    private readonly BitTorrentEngine _bitTorrentEngine;
+    private readonly DispatcherTimer _bitTorrentRefreshTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private bool _bitTorrentPollInProgress;
     private readonly DispatcherTimer _ed2kRefreshTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private bool _ed2kPollInProgress;
     // Keep response bytes untouched: transparent decompression can invalidate byte offsets used by Range resume.
@@ -35,12 +40,104 @@ public partial class MainWindow : Window
         InitializeComponent();
         DownloadsList.ItemsSource = _items;
         Ed2kDownloadsList.ItemsSource = _ed2kItems;
+        BitTorrentDownloadsList.ItemsSource = _bitTorrentItems;
+        var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
+        _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
+        _bitTorrentRefreshTimer.Tick += async (_, _) => await RefreshBitTorrentQueueAsync();
+        _bitTorrentRefreshTimer.Start();
         _ed2kRefreshTimer.Tick += async (_, _) => await RefreshEd2kQueueAsync();
         _ed2kRefreshTimer.Start();
         Directory.CreateDirectory(_root);
         LoadQueue();
         EnsureEd2kEngineRunning();
         _ = RefreshEd2kQueueAsync();
+        _ = RefreshBitTorrentQueueAsync();
+    }
+
+    private async Task RefreshBitTorrentQueueAsync()
+    {
+        if (_bitTorrentPollInProgress || _allowClose) return;
+        _bitTorrentPollInProgress = true;
+        try
+        {
+            var tasks = _bitTorrentEngine.GetTasks();
+            var hashes = tasks.Select(task => task.InfoHash).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var stale in _bitTorrentItems.Where(item => !hashes.Contains(item.InfoHash)).ToList())
+                _bitTorrentItems.Remove(stale);
+            foreach (var task in tasks)
+            {
+                var item = _bitTorrentItems.FirstOrDefault(x => x.InfoHash.Equals(task.InfoHash, StringComparison.OrdinalIgnoreCase));
+                if (item is null)
+                {
+                    item = new BitTorrentDownloadItem(task.InfoHash, _chinese);
+                    _bitTorrentItems.Add(item);
+                }
+                item.Update(task, _chinese);
+            }
+        }
+        catch (Exception ex)
+        {
+            FooterText.Text = (_chinese ? "BitTorrent 引擎错误：" : "BitTorrent engine error: ") + ex.Message;
+        }
+        finally { _bitTorrentPollInProgress = false; }
+    }
+
+    private async void AddTorrentFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = _chinese ? "选择种子文件" : "Select a torrent file",
+            Filter = "BitTorrent files (*.torrent)|*.torrent",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            await _bitTorrentEngine.AddTorrentFileAsync(dialog.FileName);
+            await RefreshBitTorrentQueueAsync();
+            FooterText.Text = _chinese ? "种子任务已添加" : "Torrent task added";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法添加种子文件：" : "Could not add torrent file: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void BitTorrentPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not BitTorrentDownloadItem item || item.IsComplete) return;
+        try
+        {
+            if (item.IsPaused) await _bitTorrentEngine.ResumeAsync(item.InfoHash);
+            else await _bitTorrentEngine.PauseAsync(item.InfoHash);
+            await RefreshBitTorrentQueueAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法控制 BitTorrent 任务：" : "Could not control BitTorrent task: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void BitTorrentRemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not BitTorrentDownloadItem item) return;
+        if (MessageBox.Show(_chinese
+                ? $"从任务列表移除此 BitTorrent 任务？已下载的数据会保留。\\n\\n{item.Name}"
+                : $"Remove this BitTorrent task? Downloaded data will be kept.\\n\\n{item.Name}",
+                "Downora", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        try
+        {
+            await _bitTorrentEngine.RemoveAsync(item.InfoHash, deleteDownloadedData: false);
+            await RefreshBitTorrentQueueAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show((_chinese ? "无法移除任务：" : "Could not remove task: ") + ex.Message,
+                "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void EnsureEd2kEngineRunning()
@@ -177,6 +274,9 @@ public partial class MainWindow : Window
     private void LanguageButton_Click(object sender, RoutedEventArgs e)
     {
         _chinese = !_chinese;
+        BitTorrentTab.Header = _chinese ? "BitTorrent 下载" : "BitTorrent";
+        AddTorrentFileButton.Content = _chinese ? "＋  添加 .torrent 文件" : "＋  Add .torrent file";
+        foreach (var item in _bitTorrentItems) item.RefreshLanguage(_chinese);
         Subtitle.Text = _chinese ? "更简单的下载方式" : "A simpler way to download";
         UrlBox.ToolTip = _chinese ? "粘贴 HTTP、HTTPS、FTP、FTPS 或 eD2k 链接" : "Paste an HTTP, HTTPS, FTP, FTPS or eD2k link";
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
@@ -200,6 +300,30 @@ public partial class MainWindow : Window
     private async void AddDownload()
     {
         var raw = UrlBox.Text.Trim();
+        if (raw.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!MagnetLink.TryParse(raw, out _, out var magnetError))
+            {
+                MessageBox.Show((_chinese ? "无效的 Magnet 链接：" : "Invalid Magnet link: ") + magnetError,
+                    "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            try
+            {
+                await _bitTorrentEngine.AddMagnetAsync(raw);
+                UrlBox.Clear();
+                await RefreshBitTorrentQueueAsync();
+                BitTorrentTab.IsSelected = true;
+                FooterText.Text = _chinese ? "Magnet 任务已添加" : "Magnet task added";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show((_chinese ? "无法添加 Magnet 任务：" : "Could not add Magnet task: ") + ex.Message,
+                    "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return;
+        }
+
         if (raw.StartsWith("ed2k://", StringComparison.OrdinalIgnoreCase))
         {
             if (Ed2kFileLink.TryParse(raw, out var ed2k, out var parseError))
@@ -880,6 +1004,10 @@ public partial class MainWindow : Window
         }
 
         try { await Task.WhenAll(_downloadTasks.ToArray()); } catch { }
+        _ed2kRefreshTimer.Stop();
+        _bitTorrentRefreshTimer.Stop();
+        try { await _bitTorrentEngine.SaveStateAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "BitTorrentState.json")); } catch { }
+        try { await _bitTorrentEngine.DisposeAsync(); } catch { }
         SaveQueue();
         _allowClose = true;
         Close();
@@ -929,6 +1057,63 @@ public partial class MainWindow : Window
         var index = 0;
         while (bytes >= 1024 && index < units.Length - 1) { bytes /= 1024; index++; }
         return $"{bytes:0.##} {units[index]}";
+    }
+}
+
+
+public sealed class BitTorrentDownloadItem : INotifyPropertyChanged
+{
+    public string InfoHash { get; }
+    public string Name { get; private set; } = "";
+    public string StatusText { get; private set; } = "";
+    public string DetailText { get; private set; } = "";
+    public double Progress { get; private set; }
+    public string ProgressText { get; private set; } = "0%";
+    public string SpeedText { get; private set; } = "";
+    public string ActionText { get; private set; } = "Pause";
+    public bool IsPaused { get; private set; }
+    public bool IsComplete { get; private set; }
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public BitTorrentDownloadItem(string infoHash, bool chinese) { InfoHash = infoHash; }
+
+    internal void Update(BitTorrentTaskSnapshot task, bool chinese)
+    {
+        Name = task.Name;
+        Progress = task.Progress;
+        ProgressText = task.SizeBytes > 0
+            ? $"{Progress:0.0}% · {Format(task.SizeBytes * Progress / 100)} / {Format(task.SizeBytes)}"
+            : $"{Progress:0.0}%";
+        SpeedText = $"{Format(task.DownloadSpeedBytesPerSecond)}/s ↓  {Format(task.UploadSpeedBytesPerSecond)}/s ↑";
+        DetailText = chinese ? $"连接节点：{task.ConnectedPeers} · {InfoHash}" : $"Peers: {task.ConnectedPeers} · {InfoHash}";
+        IsPaused = task.State.Equals("Paused", StringComparison.OrdinalIgnoreCase) || task.State.Equals("Stopped", StringComparison.OrdinalIgnoreCase);
+        IsComplete = task.IsComplete;
+        StatusText = chinese ? $"状态：{Localize(task.State)}" : task.State;
+        ActionText = IsPaused ? (chinese ? "继续" : "Resume") : (chinese ? "暂停" : "Pause");
+        NotifyAll();
+    }
+
+    public void RefreshLanguage(bool chinese) => NotifyAll();
+
+    private static string Localize(string state) => state.ToLowerInvariant() switch
+    {
+        "downloading" => "正在下载", "paused" => "已暂停", "stopped" => "已停止",
+        "seeding" => "做种中", "hashing" => "校验中", "error" => "错误",
+        "metadata" => "获取元数据", "queued" => "排队中", _ => state
+    };
+
+    private static string Format(double bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var index = 0;
+        while (bytes >= 1024 && index < units.Length - 1) { bytes /= 1024; index++; }
+        return $"{bytes:0.##} {units[index]}";
+    }
+
+    private void NotifyAll()
+    {
+        foreach (var name in new[] { nameof(Name), nameof(StatusText), nameof(DetailText), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(ActionText), nameof(IsPaused), nameof(IsComplete) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
 
