@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -25,6 +26,9 @@ public sealed class VideoDownloadService
     public const string YtDlpVersion = "2026.11.23";
     public const string YtDlpSha256 = "622ed48023cac1daa52a3bf3a6ac38f03514de214b5f0fa069389fd0f6d17e5c";
     public const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.11.23/yt-dlp.exe";
+    public const string DenoVersion = "2.9.8";
+    public const string DenoSha256 = "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf";
+    public const string DenoDownloadUrl = "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip";
 
     private readonly string _toolsDirectory;
     private readonly HttpClient _http;
@@ -36,6 +40,7 @@ public sealed class VideoDownloadService
     }
 
     public string ExecutablePath => Path.Combine(_toolsDirectory, "yt-dlp.exe");
+    public string DenoPath => Path.Combine(_toolsDirectory, "deno.exe");
 
     public static bool IsSupportedPlatformUrl(Uri uri)
     {
@@ -86,9 +91,10 @@ public sealed class VideoDownloadService
     {
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
-        var result = await RunAsync(
-            ["--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", "--", videoUrl.AbsoluteUri],
-            cancellationToken);
+        if (IsYouTube(videoUrl)) await EnsureDenoInstalledAsync(cancellationToken);
+        var args = BuildRuntimeArguments(videoUrl);
+        args.AddRange(["--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", "--", videoUrl.AbsoluteUri]);
+        var result = await RunAsync(args, cancellationToken);
         if (result.ExitCode != 0) throw new InvalidOperationException(LastUsefulLine(result.StandardError, result.StandardOutput));
         using var json = JsonDocument.Parse(result.StandardOutput);
         var root = json.RootElement;
@@ -113,14 +119,14 @@ public sealed class VideoDownloadService
         var directory = Path.GetDirectoryName(Path.GetFullPath(outputPathWithoutExtension))!;
         Directory.CreateDirectory(directory);
 
-        var args = new[]
-        {
+        var args = BuildRuntimeArguments(videoUrl);
+        args.AddRange([
             "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
             "--format", "best[height<=1080]/best",
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
             "--", videoUrl.AbsoluteUri
-        };
+        ]);
         var result = await RunAsync(args, cancellationToken, line => progress?.Report(ParseProgress(line)));
         if (result.ExitCode != 0)
             throw new InvalidOperationException(LastUsefulLine(result.StandardError, result.StandardOutput));
@@ -129,6 +135,63 @@ public sealed class VideoDownloadService
         if (finalPath is null)
             throw new IOException("yt-dlp finished without reporting an output file.");
         return Path.GetFullPath(finalPath);
+    }
+
+    private List<string> BuildRuntimeArguments(Uri videoUrl)
+    {
+        var arguments = new List<string>();
+        if (IsYouTube(videoUrl))
+        {
+            arguments.Add("--js-runtimes");
+            arguments.Add("deno:" + DenoPath);
+            arguments.Add("--remote-components");
+            arguments.Add("ejs:github");
+        }
+        return arguments;
+    }
+
+    private static bool IsYouTube(Uri uri) =>
+        uri.IdnHost.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+        uri.IdnHost.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase) ||
+        uri.IdnHost.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
+
+    private async Task EnsureDenoInstalledAsync(CancellationToken cancellationToken)
+    {
+        if (File.Exists(DenoPath) &&
+            (await ComputeSha256Async(DenoPath, cancellationToken)).Equals(DenoSha256, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var zipPath = Path.Combine(_toolsDirectory, "deno.zip.download");
+        var extractPath = Path.Combine(_toolsDirectory, "deno-extract");
+        try
+        {
+            using var response = await _http.GetAsync(DenoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var output = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, true))
+                await input.CopyToAsync(output, cancellationToken);
+
+            var downloadedHash = await ComputeSha256Async(zipPath, cancellationToken);
+            if (!downloadedHash.Equals(DenoSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The downloaded Deno runtime failed SHA-256 verification.");
+
+            if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true);
+            ZipFile.ExtractToDirectory(zipPath, extractPath, true);
+            var extracted = Directory.GetFiles(extractPath, "deno.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (extracted is null) throw new InvalidDataException("The Deno archive did not contain deno.exe.");
+            File.Move(extracted, DenoPath, true);
+        }
+        catch
+        {
+            try { if (File.Exists(zipPath)) File.Delete(zipPath); } catch { }
+            try { if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true); } catch { }
+            throw;
+        }
+        finally
+        {
+            try { if (File.Exists(zipPath)) File.Delete(zipPath); } catch { }
+            try { if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true); } catch { }
+        }
     }
 
     private static void ValidateVideoUrl(Uri uri)
