@@ -472,7 +472,10 @@ public partial class MainWindow : Window
             var folder = Path.Combine(_root, "Videos");
             Directory.CreateDirectory(folder);
             var outputBase = GetUniqueVideoBasePath(folder, safeTitle);
-            var selectedHeight = VideoQualityBox.SelectedIndex switch { 0 => 480, 1 => 720, 2 => 1080, _ => (int?)null };
+            var selectedHeight = VideoQualityBox.SelectedIndex switch
+            {
+                0 => 480, 1 => 720, 2 => 1080, 3 => 1440, 4 => 2160, _ => (int?)null
+            };
             var audioOnly = VideoModeBox.SelectedIndex == 1;
             var downloadSubtitles = VideoSubtitleCheckBox.IsChecked == true;
             var item = new VideoDownloadItem(info, uri, outputBase, selectedHeight, _chinese, audioOnly, downloadSubtitles);
