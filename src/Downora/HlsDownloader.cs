@@ -87,7 +87,7 @@ public sealed record HlsPlaylist(IReadOnlyList<HlsSegment> Segments, double Tota
         {
             if (line.StartsWith("#EXT-X-STREAM-INF:", StringComparison.OrdinalIgnoreCase))
             {
-                var match = Regex.Match(line, @"(?:^|,)\s*BANDWIDTH=(?<value>\d+)", RegexOptions.IgnoreCase);
+                var match = Regex.Match(line, @"(?:^|[:,])\s*BANDWIDTH=(?<value>\d+)", RegexOptions.IgnoreCase);
                 if (!match.Success || !long.TryParse(match.Groups["value"].Value, NumberStyles.None,
                         CultureInfo.InvariantCulture, out var bandwidth))
                     throw new InvalidDataException("An HLS variant is missing a valid BANDWIDTH value.");
