@@ -21,6 +21,10 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<DownloadItem> _items = new();
     private readonly ObservableCollection<Ed2kDownloadItem> _ed2kItems = new();
     private readonly ObservableCollection<BitTorrentDownloadItem> _bitTorrentItems = new();
+    private readonly ObservableCollection<VideoDownloadItem> _videoItems = new();
+    private readonly VideoDownloadService _videoService;
+    private readonly SemaphoreSlim _videoSlots = new(2, 2);
+    private readonly List<Task> _videoTasks = new();
     private readonly BitTorrentEngine _bitTorrentEngine;
     private readonly DispatcherTimer _bitTorrentRefreshTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _bitTorrentPollInProgress;
@@ -41,8 +45,10 @@ public partial class MainWindow : Window
         DownloadsList.ItemsSource = _items;
         Ed2kDownloadsList.ItemsSource = _ed2kItems;
         BitTorrentDownloadsList.ItemsSource = _bitTorrentItems;
+        VideoDownloadsList.ItemsSource = _videoItems;
         var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
         _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
+        _videoService = new VideoDownloadService(appData, _http);
         _bitTorrentRefreshTimer.Tick += async (_, _) => await RefreshBitTorrentQueueAsync();
         _ed2kRefreshTimer.Tick += async (_, _) => await RefreshEd2kQueueAsync();
         _ed2kRefreshTimer.Start();
@@ -293,10 +299,12 @@ public partial class MainWindow : Window
     {
         _chinese = !_chinese;
         BitTorrentTab.Header = _chinese ? "BitTorrent 下载" : "BitTorrent";
+        VideoTab.Header = _chinese ? "视频下载" : "Video downloads";
+        foreach (var item in _videoItems) item.RefreshLanguage(_chinese);
         AddTorrentFileButton.Content = _chinese ? "＋  添加 .torrent 文件" : "＋  Add .torrent file";
         foreach (var item in _bitTorrentItems) item.RefreshLanguage(_chinese);
         Subtitle.Text = _chinese ? "更简单的下载方式" : "A simpler way to download";
-        UrlBox.ToolTip = _chinese ? "粘贴 HTTP、HTTPS、FTP、FTPS 或 eD2k 链接" : "Paste an HTTP, HTTPS, FTP, FTPS or eD2k link";
+        UrlBox.ToolTip = _chinese ? "粘贴直链、Bilibili / YouTube 视频链接、eD2k 或 Magnet 链接" : "Paste a direct link, Bilibili / YouTube video URL, eD2k or Magnet link";
         QueueTitle.Text = _chinese ? "下载任务" : "Downloads";
         FooterText.Text = _chinese ? "就绪" : "Ready";
         EngineText.Text = _chinese ? "HTTP / HTTPS / FTP / FTPS / eD2k 链接解析" : "HTTP / HTTPS / FTP / FTPS / eD2k link parsing";
@@ -410,6 +418,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (VideoDownloadService.IsSupportedPlatformUrl(uri))
+        {
+            UrlBox.Clear();
+            await AddVideoDownloadAsync(uri);
+            return;
+        }
+
         if (uri.Scheme is "ftp" or "ftps")
         {
             if (WindowsCredentialStore.Read(uri) is null)
@@ -438,6 +453,66 @@ public partial class MainWindow : Window
         UrlBox.Clear();
         SaveQueue();
         StartDownload(item);
+    }
+
+    private async Task AddVideoDownloadAsync(Uri uri)
+    {
+        FooterText.Text = _chinese ? "正在读取视频信息…" : "Reading video information…";
+        try
+        {
+            var info = await _videoService.GetInfoAsync(uri);
+            var safeTitle = Sanitize(info.Title);
+            if (string.IsNullOrWhiteSpace(safeTitle)) safeTitle = "video-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var folder = Path.Combine(_root, "Videos");
+            Directory.CreateDirectory(folder);
+            var reservedPath = UniquePath(Path.Combine(folder, safeTitle + ".mp4"));
+            var outputBase = Path.Combine(folder, Path.GetFileNameWithoutExtension(reservedPath));
+            var item = new VideoDownloadItem(info, _chinese);
+            _videoItems.Insert(0, item);
+            VideoTab.IsSelected = true;
+            _videoTasks.Add(RunVideoDownloadAsync(item, uri, outputBase));
+            FooterText.Text = _chinese ? "视频任务已加入队列" : "Video task added to queue";
+        }
+        catch (Exception ex)
+        {
+            FooterText.Text = (_chinese ? "视频解析失败：" : "Video extraction failed: ") + ex.Message;
+            MessageBox.Show(FooterText.Text, "Downora", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task RunVideoDownloadAsync(VideoDownloadItem item, Uri uri, string outputBase)
+    {
+        var enteredSlot = false;
+        try
+        {
+            item.SetStatus(_chinese ? "等待下载" : "Queued");
+            await _videoSlots.WaitAsync(item.Token.Token);
+            enteredSlot = true;
+            item.SetStatus(_chinese ? "正在下载" : "Downloading");
+            var progress = new Progress<VideoDownloadProgress>(value => item.Update(value, _chinese));
+            var outputPath = await _videoService.DownloadAsync(uri, outputBase, progress, item.Token.Token);
+            item.SetCompleted(outputPath, _chinese);
+            FooterText.Text = _chinese ? "视频下载完成" : "Video download complete";
+            try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+        }
+        catch (OperationCanceledException)
+        {
+            item.SetCancelled(_chinese);
+        }
+        catch (Exception ex)
+        {
+            item.SetFailed(ex.Message, _chinese);
+        }
+        finally
+        {
+            if (enteredSlot) _videoSlots.Release();
+        }
+    }
+
+    private void VideoCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not VideoDownloadItem item || !item.CanCancel) return;
+        item.Token.Cancel();
     }
 
     private string? PromptForAmulePassword()
@@ -1021,7 +1096,9 @@ public partial class MainWindow : Window
             }
         }
 
-        try { await Task.WhenAll(_downloadTasks.ToArray()); } catch { }
+        foreach (var video in _videoItems)
+            if (video.CanCancel) video.Token.Cancel();
+        try { await Task.WhenAll(_downloadTasks.Concat(_videoTasks).ToArray()); } catch { }
         _ed2kRefreshTimer.Stop();
         _bitTorrentRefreshTimer.Stop();
         try { await _bitTorrentEngine.SaveStateAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora", "BitTorrentState.json")); } catch { }
@@ -1078,6 +1155,86 @@ public partial class MainWindow : Window
     }
 }
 
+
+public sealed class VideoDownloadItem : INotifyPropertyChanged
+{
+    public VideoPlatformInfo Info { get; }
+    public CancellationTokenSource Token { get; } = new();
+    public string Title { get; }
+    public string Subtitle { get; }
+    public string Status { get; private set; } = "";
+    public double Progress { get; private set; }
+    public string ProgressText { get; private set; } = "0%";
+    public string SpeedText { get; private set; } = "";
+    public string EtaText { get; private set; } = "";
+    public bool IsCompleted { get; private set; }
+    public bool IsCancelled { get; private set; }
+    public bool CanCancel => !IsCompleted && !IsCancelled && !Token.IsCancellationRequested;
+    private bool _chinese;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public VideoDownloadItem(VideoPlatformInfo info, bool chinese)
+    {
+        Info = info;
+        Title = info.Title;
+        Subtitle = string.Join(" · ", new[] { info.Uploader, info.DurationSeconds is double seconds ? TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss") : null, info.Extractor }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        _chinese = chinese;
+        Status = chinese ? "等待中" : "Queued";
+    }
+
+    public void SetStatus(string status) { Status = status; NotifyAll(); }
+
+    public void Update(VideoDownloadProgress progress, bool chinese)
+    {
+        _chinese = chinese;
+        Progress = Math.Clamp(progress.Percent, 0, 100);
+        ProgressText = $"{Progress:0.0}%";
+        SpeedText = progress.Speed ?? "";
+        EtaText = progress.Eta is null ? "" : (chinese ? "剩余 " : "ETA ") + progress.Eta;
+        Status = chinese ? "正在下载" : "Downloading";
+        NotifyAll();
+    }
+
+    public void SetCompleted(string path, bool chinese)
+    {
+        Progress = 100;
+        ProgressText = "100%";
+        SpeedText = "";
+        EtaText = "";
+        Status = (chinese ? "已完成 · " : "Completed · ") + Path.GetFileName(path);
+        IsCompleted = true;
+        NotifyAll();
+    }
+
+    public void SetCancelled(bool chinese)
+    {
+        IsCancelled = true;
+        Status = chinese ? "已取消（临时文件保留）" : "Cancelled (partial file kept)";
+        SpeedText = "";
+        EtaText = "";
+        NotifyAll();
+    }
+
+    public void SetFailed(string error, bool chinese)
+    {
+        Status = (chinese ? "失败：" : "Failed: ") + error;
+        SpeedText = "";
+        EtaText = "";
+        NotifyAll();
+    }
+
+    public void RefreshLanguage(bool chinese)
+    {
+        _chinese = chinese;
+        NotifyAll();
+    }
+
+    private void NotifyAll()
+    {
+        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
 
 public sealed class BitTorrentDownloadItem : INotifyPropertyChanged
 {
