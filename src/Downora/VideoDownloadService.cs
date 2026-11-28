@@ -34,6 +34,8 @@ public sealed class VideoDownloadService : IDisposable
     private readonly string _toolsDirectory;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
+    private readonly SemaphoreSlim _installGate = new(1, 1);
+    private readonly SemaphoreSlim _denoInstallGate = new(1, 1);
 
     public VideoDownloadService(string appDataDirectory, HttpClient? httpClient = null)
     {
@@ -67,6 +69,13 @@ public sealed class VideoDownloadService : IDisposable
     }
 
     public async Task EnsureInstalledAsync(CancellationToken cancellationToken = default)
+    {
+        await _installGate.WaitAsync(cancellationToken);
+        try { await EnsureInstalledCoreAsync(cancellationToken); }
+        finally { _installGate.Release(); }
+    }
+
+    private async Task EnsureInstalledCoreAsync(CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(_toolsDirectory);
         if (File.Exists(ExecutablePath))
@@ -169,6 +178,13 @@ public sealed class VideoDownloadService : IDisposable
         uri.IdnHost.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
 
     private async Task EnsureDenoInstalledAsync(CancellationToken cancellationToken)
+    {
+        await _denoInstallGate.WaitAsync(cancellationToken);
+        try { await EnsureDenoInstalledCoreAsync(cancellationToken); }
+        finally { _denoInstallGate.Release(); }
+    }
+
+    private async Task EnsureDenoInstalledCoreAsync(CancellationToken cancellationToken)
     {
         if (File.Exists(DenoPath)) return;
 
