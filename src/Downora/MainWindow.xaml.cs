@@ -1169,7 +1169,8 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
     public string EtaText { get; private set; } = "";
     public bool IsCompleted { get; private set; }
     public bool IsCancelled { get; private set; }
-    public bool CanCancel => !IsCompleted && !IsCancelled && !Token.IsCancellationRequested;
+    public bool IsFailed { get; private set; }
+    public bool CanCancel => !IsCompleted && !IsCancelled && !IsFailed && !Token.IsCancellationRequested;
     private bool _chinese;
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -1217,6 +1218,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
 
     public void SetFailed(string error, bool chinese)
     {
+        IsFailed = true;
         Status = (chinese ? "失败：" : "Failed: ") + error;
         SpeedText = "";
         EtaText = "";
@@ -1231,7 +1233,7 @@ public sealed class VideoDownloadItem : INotifyPropertyChanged
 
     private void NotifyAll()
     {
-        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel) })
+        foreach (var name in new[] { nameof(Title), nameof(Subtitle), nameof(Status), nameof(Progress), nameof(ProgressText), nameof(SpeedText), nameof(EtaText), nameof(CanCancel), nameof(IsFailed) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
