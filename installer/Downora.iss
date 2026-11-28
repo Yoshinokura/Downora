@@ -2,7 +2,7 @@
 #ifndef AppVersion
   #define AppVersion "0.1.0"
 #endif
-#define AppPublisher "Downora Project"
+#define AppPublisher "R00TAdm1n"
 #define AppExeName "Downora.exe"
 
 [Setup]
