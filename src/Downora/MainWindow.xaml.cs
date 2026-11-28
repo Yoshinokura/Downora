@@ -54,6 +54,11 @@ public partial class MainWindow : Window
             ? _root
             : Path.GetFullPath(_settings.DownloadDirectory);
         _chinese = _settings.ChineseLanguage;
+        if (_chinese)
+        {
+            _chinese = false;
+            LanguageButton_Click(this, new RoutedEventArgs());
+        }
         var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Downora");
         _bitTorrentEngine = new BitTorrentEngine(appData, Path.Combine(_root, "BitTorrent"));
         _videoService = new VideoDownloadService(appData);
