@@ -2,7 +2,7 @@
 
 **Downora** is a Windows download manager with a clean Google-inspired Material 3 interface and English / 简体中文 localization.
 
-> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine are integrated into the main window. Users can add Magnet links or browse for .torrent files, view progress, transfer speeds and peer counts, pause/resume tasks, and remove tasks while keeping downloaded data. Engine state is saved on exit and restored at startup; live-swarm validation is still pending. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
+> Status: early development. The current prototype implements HTTP/HTTPS downloads and authenticated FTP/explicit FTPS downloads, with a three-task concurrency limit. It can parse and validate eD2k file links, submit them to a separately installed local aMule 3.2.0+ engine, and synchronize its queue, progress, speed, source count, pause/resume and cancellation controls through the REST API. HTTP Range and FTP REST resume are attempted when supported by the server. Magnet link parsing and an embedded MonoTorrent engine are integrated into the main window. Users can add Magnet links or browse for .torrent files, view progress, transfer speeds and peer counts, pause/resume tasks, and remove tasks while keeping downloaded data. Engine state is saved on exit and restored at startup; live-swarm validation is still pending. Initial video-platform integration uses the official yt-dlp Windows binary to extract metadata and download supported Bilibili, YouTube, Vimeo, Dailymotion and Twitch URLs. Built-in eD2k engine functionality, M3U8, browser integration and advanced scheduling are also not yet implemented.
 
 ## Features
 
@@ -19,7 +19,7 @@
 - Completion notification and automatic SHA-256 checksum display
 - FTP / FTPS credentials stored in Windows Credential Manager
 - Safe filename handling, collision avoidance and rejection of credential-bearing URLs
-- BitTorrent magnet URI parsing (40-character hexadecimal and 32-character base32 info hashes, display names and HTTP/HTTPS/UDP tracker extraction)
+- Video-platform URL detection and metadata extraction for Bilibili, YouTube, Vimeo, Dailymotion and Twitch through yt-dlp; progress and cancellation are shown in a dedicated video queue. The pinned Windows binary is downloaded on first use and SHA-256 verified. Initial format selection uses the best single-file format up to 1080p; separate-track merging, browser-cookie login and persistent video-task recovery are not implemented yet.\n- BitTorrent magnet URI parsing (40-character hexadecimal and 32-character base32 info hashes, display names and HTTP/HTTPS/UDP tracker extraction)
 - Embedded MonoTorrent 3.0.2 engine with main-window task list for Magnet / .torrent tasks, progress, transfer speeds, peer counts, pause/resume and removal; state save on exit and automatic task restoration at startup are implemented; live swarm validation remains pending
 
 ## Windows one-click installer
