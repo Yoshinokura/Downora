@@ -30,12 +30,16 @@ public sealed class VideoDownloadService : IDisposable
     public const string DenoVersion = "2.9.8";
     public const string DenoSha256 = "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf";
     public const string DenoDownloadUrl = "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip";
+    public const string FfmpegVersion = "9.0.2";
+    public const string FfmpegSha256 = "f7ba27e7986a2d0835881e742a682dec17896f6dc2cdcf9e596f043d2763d894";
+    public const string FfmpegDownloadUrl = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-26-12-56/ffmpeg-n9.0.2-982-g836df4e858-win64-lgpl-shared-9.0.zip";
 
     private readonly string _toolsDirectory;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly SemaphoreSlim _installGate = new(1, 1);
     private readonly SemaphoreSlim _denoInstallGate = new(1, 1);
+    private readonly SemaphoreSlim _ffmpegInstallGate = new(1, 1);
 
     public VideoDownloadService(string appDataDirectory, HttpClient? httpClient = null)
     {
@@ -46,6 +50,8 @@ public sealed class VideoDownloadService : IDisposable
 
     public string ExecutablePath => Path.Combine(_toolsDirectory, "yt-dlp.exe");
     public string DenoPath => Path.Combine(_toolsDirectory, "deno.exe");
+    public string FfmpegDirectory => Path.Combine(_toolsDirectory, "ffmpeg");
+    public string FfmpegPath => Path.Combine(FfmpegDirectory, "ffmpeg.exe");
 
     public void Dispose()
     {
@@ -138,13 +144,18 @@ public sealed class VideoDownloadService : IDisposable
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
         if (IsYouTube(videoUrl)) await EnsureDenoInstalledAsync(cancellationToken);
+        await EnsureFfmpegInstalledAsync(cancellationToken);
         var directory = Path.GetDirectoryName(Path.GetFullPath(outputPathWithoutExtension))!;
         Directory.CreateDirectory(directory);
 
         var args = BuildRuntimeArguments(videoUrl);
         args.AddRange([
             "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
-            "--format", maxHeight is > 0 ? $"best[height<={maxHeight}]/best" : "best",
+            "--ffmpeg-location", FfmpegDirectory,
+            "--format", maxHeight is > 0
+                ? $"bestvideo[height<={maxHeight}]+bestaudio/best[height<={maxHeight}]/best"
+                : "bestvideo+bestaudio/best",
+            "--merge-output-format", "mp4",
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
             "--", videoUrl.AbsoluteUri
@@ -176,6 +187,78 @@ public sealed class VideoDownloadService : IDisposable
         uri.IdnHost.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) ||
         uri.IdnHost.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase) ||
         uri.IdnHost.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
+
+    private async Task EnsureFfmpegInstalledAsync(CancellationToken cancellationToken)
+    {
+        await _ffmpegInstallGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (File.Exists(FfmpegPath)) return;
+            await EnsureFfmpegInstalledCoreAsync(cancellationToken);
+        }
+        finally { _ffmpegInstallGate.Release(); }
+    }
+
+    private async Task EnsureFfmpegInstalledCoreAsync(CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(_toolsDirectory);
+        var archivePath = Path.Combine(_toolsDirectory, "ffmpeg.zip.download");
+        var stagingDirectory = Path.Combine(_toolsDirectory, "ffmpeg-staging");
+        try
+        {
+            using var response = await _http.GetAsync(FfmpegDownloadUrl,
+                HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            await using (var input = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var output = new FileStream(archivePath, FileMode.Create, FileAccess.Write,
+                FileShare.None, 128 * 1024, true))
+                await input.CopyToAsync(output, cancellationToken);
+
+            var downloadedHash = await ComputeSha256Async(archivePath, cancellationToken);
+            if (!downloadedHash.Equals(FfmpegSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The downloaded FFmpeg archive failed SHA-256 verification.");
+
+            if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true);
+            Directory.CreateDirectory(stagingDirectory);
+            using (var archive = ZipFile.OpenRead(archivePath))
+            {
+                var binEntries = archive.Entries.Where(entry =>
+                    entry.FullName.Replace('\\\\', '/').Contains("/bin/", StringComparison.OrdinalIgnoreCase) ||
+                    entry.FullName.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)).ToArray();
+                foreach (var entry in binEntries)
+                {
+                    var normalized = entry.FullName.Replace('\\\\', '/');
+                    var binIndex = normalized.IndexOf("bin/", StringComparison.OrdinalIgnoreCase);
+                    if (binIndex < 0) continue;
+                    var relative = normalized[(binIndex + 4)..];
+                    if (string.IsNullOrWhiteSpace(relative) || relative.Contains('/') ||
+                        !(relative.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                          relative.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))) continue;
+                    var destination = Path.Combine(stagingDirectory, Path.GetFileName(relative));
+                    await using var source = entry.Open();
+                    await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write,
+                        FileShare.None, 64 * 1024, true);
+                    await source.CopyToAsync(target, cancellationToken);
+                }
+            }
+
+            if (!File.Exists(Path.Combine(stagingDirectory, "ffmpeg.exe")))
+                throw new InvalidDataException("The FFmpeg archive did not contain bin/ffmpeg.exe.");
+            if (Directory.Exists(FfmpegDirectory)) Directory.Delete(FfmpegDirectory, true);
+            Directory.Move(stagingDirectory, FfmpegDirectory);
+        }
+        catch
+        {
+            try { if (File.Exists(archivePath)) File.Delete(archivePath); } catch { }
+            try { if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true); } catch { }
+            throw;
+        }
+        finally
+        {
+            try { if (File.Exists(archivePath)) File.Delete(archivePath); } catch { }
+            try { if (Directory.Exists(stagingDirectory)) Directory.Delete(stagingDirectory, true); } catch { }
+        }
+    }
 
     private async Task EnsureDenoInstalledAsync(CancellationToken cancellationToken)
     {
