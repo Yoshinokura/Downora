@@ -35,6 +35,14 @@ public sealed class VideoDownloadServiceTests
         Assert.True(VideoDownloadService.IsSupportedPlatformUrl(new Uri(value)));
     }
 
+    [Fact]
+    public void FfmpegRuntimeUsesPinnedWindowsBuildAndSha256()
+    {
+        Assert.Matches("^[0-9a-f]{64}$", VideoDownloadService.FfmpegSha256);
+        Assert.Contains("win64-lgpl-shared", VideoDownloadService.FfmpegDownloadUrl);
+        Assert.StartsWith("https://github.com/", VideoDownloadService.FfmpegDownloadUrl);
+    }
+
     [Theory]
     [InlineData("https://example.com/video.mp4")]
     [InlineData("file:///C:/video.mp4")]
