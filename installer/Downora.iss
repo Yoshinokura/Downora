@@ -23,6 +23,7 @@ DefaultDirName={localappdata}\Programs\Downora
 DefaultGroupName=Downora
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+MinVersion={#MinWindowsVersion}
 ArchitecturesAllowed={#AppArchitecture}
 ArchitecturesInstallIn64BitMode={#AppArchitecture}
 OutputDir=output
