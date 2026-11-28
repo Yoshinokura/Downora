@@ -101,6 +101,15 @@ public sealed class VideoDownloadServiceTests
     }
 
     [Theory]
+    [InlineData("Sign in to confirm you're not a bot", false, "requires account access")]
+    [InlineData("This is a members-only video", true, "需要账号登录或会员权限")]
+    [InlineData("HTTP Error 403: Forbidden", false, "platform denied")]
+    public void RestrictedVideoErrorsExplainAnonymousAccessPolicy(string error, bool chinese, string expectedText)
+    {
+        Assert.Contains(expectedText, VideoDownloadService.FormatDownloadError(error, chinese), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("https://example.com/video.mp4")]
     [InlineData("file:///C:/video.mp4")]
     [InlineData("ftp://youtube.com/video")]
