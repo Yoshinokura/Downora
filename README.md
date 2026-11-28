@@ -8,7 +8,8 @@
 
 - Windows x64 desktop app (WPF, .NET 8) and a separate native Windows ARM64 build/installer (Windows 11 ARM64 target)
 - Material-inspired layout, light-first palette
-- English / 简体中文 language switch
+- English / 简体中文 language switch with the selected language persisted between launches
+- Settings dialog for choosing and persisting the default direct-download and video-download folder; changing the folder does not move existing files, and BitTorrent keeps its dedicated engine directory
 - HTTP/HTTPS downloads with progress, pause/resume (server Range support required), cancel, queue and speed display
 - Automatic four-way segmented HTTP downloads for files of 16 MiB or larger when the server advertises and honors byte ranges; segment fragments are retained for pause/resume
 - Bounded automatic retries for transient HTTP connection errors and HTTP 408 / 429 / 5xx responses
