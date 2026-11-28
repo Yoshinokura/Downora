@@ -106,7 +106,7 @@ jobs:
         shell: pwsh
         run: |
           $version = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF_NAME.Substring(1) } else { "0.1.$env:GITHUB_RUN_NUMBER" }
-          & "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" "/DAppVersion=$version" "/DAppArchitecture=arm64" "/DOutputBaseName=Downora-Setup-ARM64" "installer/Downora.iss"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DAppArchitecture=arm64" "/DMinWindowsVersion=10.0.22000" "/DOutputBaseName=Downora-Setup-ARM64" "installer/Downora.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload ARM64 installer
