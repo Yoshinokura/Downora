@@ -116,6 +116,7 @@ public sealed class VideoDownloadService
     {
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
+        if (IsYouTube(videoUrl)) await EnsureDenoInstalledAsync(cancellationToken);
         var directory = Path.GetDirectoryName(Path.GetFullPath(outputPathWithoutExtension))!;
         Directory.CreateDirectory(directory);
 
@@ -157,9 +158,7 @@ public sealed class VideoDownloadService
 
     private async Task EnsureDenoInstalledAsync(CancellationToken cancellationToken)
     {
-        if (File.Exists(DenoPath) &&
-            (await ComputeSha256Async(DenoPath, cancellationToken)).Equals(DenoSha256, StringComparison.OrdinalIgnoreCase))
-            return;
+        if (File.Exists(DenoPath)) return;
 
         var zipPath = Path.Combine(_toolsDirectory, "deno.zip.download");
         var extractPath = Path.Combine(_toolsDirectory, "deno-extract");
