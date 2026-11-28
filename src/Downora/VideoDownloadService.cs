@@ -87,7 +87,7 @@ public sealed class VideoDownloadService
         ValidateVideoUrl(videoUrl);
         await EnsureInstalledAsync(cancellationToken);
         var result = await RunAsync(
-            ["--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", "--no-call-home", "--", videoUrl.AbsoluteUri],
+            ["--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", "--", videoUrl.AbsoluteUri],
             cancellationToken);
         if (result.ExitCode != 0) throw new InvalidOperationException(LastUsefulLine(result.StandardError, result.StandardOutput));
         using var json = JsonDocument.Parse(result.StandardOutput);
@@ -115,7 +115,7 @@ public sealed class VideoDownloadService
 
         var args = new[]
         {
-            "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings", "--no-call-home",
+            "--ignore-config", "--newline", "--progress", "--continue", "--no-playlist", "--no-warnings",
             "--format", "best[height<=1080]/best",
             "--print", "after_move:filepath",
             "--output", outputPathWithoutExtension + ".%(ext)s",
