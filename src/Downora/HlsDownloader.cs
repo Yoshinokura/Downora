@@ -2,6 +2,7 @@ using System.IO;
 using System.Globalization;
 using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 
 namespace Downora;
 
@@ -65,6 +66,51 @@ public sealed record HlsPlaylist(IReadOnlyList<HlsSegment> Segments, double Tota
 
         return new HlsPlaylist(segments, segments.Sum(segment => segment.DurationSeconds));
     }
+
+    /// <summary>Selects the highest-bandwidth HTTP(S) media variant from a master playlist.</summary>
+    public static Uri SelectVariantPlaylist(string content, Uri playlistUri)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(playlistUri);
+        if (playlistUri.Scheme is not ("http" or "https"))
+            throw new NotSupportedException("HLS playlists must use HTTP or HTTPS.");
+
+        var lines = content.Replace("\r", "").Split('\n')
+            .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+        if (lines.Length == 0 || lines[0] != "#EXTM3U")
+            throw new InvalidDataException("The URL did not return a valid M3U8 playlist.");
+
+        Uri? selected = null;
+        long selectedBandwidth = -1;
+        long? pendingBandwidth = null;
+        foreach (var line in lines.Skip(1))
+        {
+            if (line.StartsWith("#EXT-X-STREAM-INF:", StringComparison.OrdinalIgnoreCase))
+            {
+                var match = Regex.Match(line, @"(?:^|,)\s*BANDWIDTH=(?<value>\d+)", RegexOptions.IgnoreCase);
+                if (!match.Success || !long.TryParse(match.Groups["value"].Value, NumberStyles.None,
+                        CultureInfo.InvariantCulture, out var bandwidth))
+                    throw new InvalidDataException("An HLS variant is missing a valid BANDWIDTH value.");
+                pendingBandwidth = bandwidth;
+                continue;
+            }
+
+            if (line.StartsWith('#')) continue;
+            if (pendingBandwidth is null) continue;
+            if (!Uri.TryCreate(playlistUri, line, out var candidate) ||
+                candidate.Scheme is not ("http" or "https"))
+                throw new InvalidDataException("The master playlist contains an invalid variant URL.");
+            if (pendingBandwidth.Value > selectedBandwidth)
+            {
+                selected = candidate;
+                selectedBandwidth = pendingBandwidth.Value;
+            }
+            pendingBandwidth = null;
+        }
+
+        return selected ?? throw new InvalidDataException("The master playlist does not contain a usable media variant.");
+    }
+
 }
 
 public static class HlsDownloader
@@ -77,10 +123,25 @@ public static class HlsDownloader
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
-        using var playlistResponse = await http.GetAsync(playlistUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        playlistResponse.EnsureSuccessStatusCode();
-        var content = await playlistResponse.Content.ReadAsStringAsync(cancellationToken);
-        var playlist = HlsPlaylist.Parse(content, playlistUri);
+        if (playlistUri.Scheme is not ("http" or "https"))
+            throw new NotSupportedException("HLS playlists must use HTTP or HTTPS.");
+
+        var mediaPlaylistUri = playlistUri;
+        string content;
+        for (var depth = 0; ; depth++)
+        {
+            using var playlistResponse = await http.GetAsync(mediaPlaylistUri,
+                HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            playlistResponse.EnsureSuccessStatusCode();
+            content = await playlistResponse.Content.ReadAsStringAsync(cancellationToken);
+            var hasVariants = content.Split('\n').Any(line =>
+                line.TrimStart().StartsWith("#EXT-X-STREAM-INF:", StringComparison.OrdinalIgnoreCase));
+            if (!hasVariants) break;
+            if (depth >= 3)
+                throw new InvalidDataException("The HLS master playlist nesting limit was exceeded.");
+            mediaPlaylistUri = HlsPlaylist.SelectVariantPlaylist(content, mediaPlaylistUri);
+        }
+        var playlist = HlsPlaylist.Parse(content, mediaPlaylistUri);
 
         var fullPath = Path.GetFullPath(outputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
