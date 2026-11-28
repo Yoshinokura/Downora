@@ -8,6 +8,7 @@ public sealed class DownoraSettings
     public string DownloadDirectory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Downora");
     public bool ChineseLanguage { get; set; }
+    public int MaxConcurrentDownloads { get; set; } = 3;
 
     public static DownoraSettings Load(string path)
     {
