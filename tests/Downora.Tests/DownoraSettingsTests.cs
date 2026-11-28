@@ -17,7 +17,8 @@ public sealed class DownoraSettingsTests
             var settings = new DownoraSettings
             {
                 DownloadDirectory = expectedFolder,
-                ChineseLanguage = true
+                ChineseLanguage = true,
+                MaxConcurrentDownloads = 6
             };
             settings.Save(settingsFile);
 
@@ -25,6 +26,7 @@ public sealed class DownoraSettingsTests
 
             Assert.Equal(expectedFolder, loaded.DownloadDirectory);
             Assert.True(loaded.ChineseLanguage);
+            Assert.Equal(6, loaded.MaxConcurrentDownloads);
         }
         finally
         {
